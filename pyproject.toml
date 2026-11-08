@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forever-bis"
+version = "0.1.0"
+description = "A WoW Forever gear progression planner foundation"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic==1.20.1",
+    "fastapi==0.162.0",
+    "psycopg[binary]==3.3.8",
+    "pydantic==2.14.3",
+    "pydantic-settings==2.16.2",
+    "sqlalchemy==2.1.8",
+    "uvicorn[standard]==0.54.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx2==2.16.0",
+    "pytest==9.2.0",
+    "ruff==0.17.4",
+]
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests", "tests"]
+pythonpath = ["."]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["backend"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

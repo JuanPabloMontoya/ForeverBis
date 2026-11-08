@@ -1,0 +1,121 @@
+{
+  "source": "TheWoWDB Forever public API",
+  "source_url": "https://thewowdb.com/developers/",
+  "attribution": "Data from TheWoWDB (thewowdb.com)",
+  "attribution_required": true,
+  "terms_url": "https://thewowdb.com/developers/#terms",
+  "sampled_date": "2026-11-07",
+  "builds": "wow_classic_beta-1.60.1.70532",
+  "sample_count": 3,
+  "sanitization": "Allowlisted item fields only; auction prices, faction price scans, tooltip HTML, and unrelated response fields omitted.",
+  "items": [
+    {
+      "id": 25,
+      "kind": "item",
+      "version": "forever",
+      "version_label": "WoW Forever",
+      "build": "wow_classic_beta-1.60.1.70532",
+      "name": "Worn Shortsword",
+      "quality": "common",
+      "item_level": 2,
+      "required_level": null,
+      "item_type": "Weapon",
+      "item_subtype": "One-Handed Sword",
+      "slot": "Main Hand",
+      "armor": null,
+      "weapon": {
+        "damage_max": 3,
+        "damage_min": 1,
+        "dps": 1.1,
+        "speed": 1.9
+      },
+      "stats": [],
+      "effects": [],
+      "classes": [],
+      "icon_url": "https://render.worldofwarcraft.com/us/icons/56/inv_sword_04.jpg",
+      "links": {
+        "api": "https://thewowdb.com/api/v1/forever/item/25",
+        "html": "https://thewowdb.com/wow-forever/item/worn-shortsword-25/",
+        "tooltip": "https://thewowdb.com/api/v1/tooltip/forever/item/25"
+      },
+      "attribution": {
+        "required": true,
+        "terms": "https://thewowdb.com/developers/#terms",
+        "text": "Data from TheWoWDB (thewowdb.com)",
+        "url": "https://thewowdb.com/wow-forever/item/worn-shortsword-25/"
+      }
+    },
+    {
+      "id": 35,
+      "kind": "item",
+      "version": "forever",
+      "version_label": "WoW Forever",
+      "build": "wow_classic_beta-1.60.1.70532",
+      "name": "Bent Staff",
+      "quality": "common",
+      "item_level": 2,
+      "required_level": null,
+      "item_type": "Weapon",
+      "item_subtype": "Staff",
+      "slot": "Two-Hand",
+      "armor": null,
+      "weapon": {
+        "damage_max": 5,
+        "damage_min": 3,
+        "dps": 1.4,
+        "speed": 2.9
+      },
+      "stats": [],
+      "effects": [],
+      "classes": [],
+      "icon_url": "https://render.worldofwarcraft.com/us/icons/56/inv_staff_08.jpg",
+      "links": {
+        "api": "https://thewowdb.com/api/v1/forever/item/35",
+        "html": "https://thewowdb.com/wow-forever/item/bent-staff-35/",
+        "tooltip": "https://thewowdb.com/api/v1/tooltip/forever/item/35"
+      },
+      "attribution": {
+        "required": true,
+        "terms": "https://thewowdb.com/developers/#terms",
+        "text": "Data from TheWoWDB (thewowdb.com)",
+        "url": "https://thewowdb.com/wow-forever/item/bent-staff-35/"
+      }
+    },
+    {
+      "id": 36,
+      "kind": "item",
+      "version": "forever",
+      "version_label": "WoW Forever",
+      "build": "wow_classic_beta-1.60.1.70532",
+      "name": "Worn Mace",
+      "quality": "common",
+      "item_level": 2,
+      "required_level": null,
+      "item_type": "Weapon",
+      "item_subtype": "One-Handed Mace",
+      "slot": "Main Hand",
+      "armor": null,
+      "weapon": {
+        "damage_max": 3,
+        "damage_min": 1,
+        "dps": 1.1,
+        "speed": 1.9
+      },
+      "stats": [],
+      "effects": [],
+      "classes": [],
+      "icon_url": "https://render.worldofwarcraft.com/us/icons/56/inv_mace_03.jpg",
+      "links": {
+        "api": "https://thewowdb.com/api/v1/forever/item/36",
+        "html": "https://thewowdb.com/wow-forever/item/worn-mace-36/",
+        "tooltip": "https://thewowdb.com/api/v1/tooltip/forever/item/36"
+      },
+      "attribution": {
+        "required": true,
+        "terms": "https://thewowdb.com/developers/#terms",
+        "text": "Data from TheWoWDB (thewowdb.com)",
+        "url": "https://thewowdb.com/wow-forever/item/worn-mace-36/"
+      }
+    }
+  ]
+}
