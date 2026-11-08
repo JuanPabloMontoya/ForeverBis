@@ -1,6 +1,6 @@
 # Forever BIS — Plan del proyecto
 
-**Estado:** Fase 3: catalogo implementado; prototipo Gear Planner entregado para revision (7 nov 2026)
+**Estado:** Fase 3.1: auditoria de cobertura y proveedores completada; pendiente aprobacion humana antes de la siguiente fase (7 nov 2026)
 **Investigación consultada:** 7 de noviembre de 2026  
 **Alcance:** decisiones de arquitectura, planificación y estado de ejecución por fase.
 
@@ -216,4 +216,20 @@ Implementado y validado el 7 de noviembre de 2026 (America/Bogota), sin iniciar 
 
 La pagina principal es Gear Planner; Item Database permanece accesible como seccion secundaria. El prototipo implementa selectores de las nueve clases y sus especializaciones, faccion Alliance/Horde, progresion horizontal accesible para niveles 1-60 y la distribucion paper doll de 17 espacios. Cada espacio indica recomendacion no disponible y permite abrir registros de catalogo coincidentes; dichos registros se identifican como datos de proveedor, nunca como recomendaciones. El detalle reutiliza el catalogo existente.
 
-La base observada sigue siendo de solo tres objetos marcados `needs_review`. No se inventaron objetos, iconos ni recomendaciones. No hay calculo BIS ni cambio de ingesta o base de datos. Las pruebas frontend pasaron: 16 pruebas; TypeScript y build de produccion tambien pasaron. La revision humana del prototipo es el siguiente punto de control; no comenzar Fase 3.1 sin autorizacion.
+La base observada sigue siendo de solo tres objetos marcados `needs_review`. No se inventaron objetos, iconos ni recomendaciones. No hay calculo BIS ni cambio de ingesta o base de datos. Las pruebas frontend pasaron: 16 pruebas; TypeScript y build de produccion tambien pasaron. La direccion corregida de producto se conserva: Gear Planner es la pagina principal y el catalogo es secundario.
+
+## Fase 3.1 - auditoria de cobertura, proveedores y calidad
+
+Completada el 7 de noviembre de 2026 (America/Bogota), con lectura de PostgreSQL y pruebas HTTP acotadas. El estado inicial se verifico antes de investigar: 3 items, todos `needs_review`, sin cambios en filas, migraciones ni volumen durante esta fase.
+
+- La documentacion vigente de TheWoWDB confirma lista de items paginada (hasta 100 por pagina/200 paginas), detalle, busqueda por nombre y tooltip renderizado. No documenta filtros por slot, calidad o nivel ni relaciones de adquisicion. El importer toma IDs iniciales sin diversidad y la ejecucion por defecto (`per_page=100`) solo consulta una pagina; el limite duro por ejecucion sigue siendo 100.
+- Dry-run de 10: 10 resumenes recuperados, 8 detalles validados, 2 detalles 404 (IDs 41,42), 0 persistidos. Los 8 objetos eran armor/weapons, pero solo cubrieron Main Hand, Two-Hand, Shirt, Legs y Feet; shirt no es un slot del planner. Sus arrays `stats`, `effects` y `classes` estaban vacios; `required_level` en detalle era null frente a valores 0/1 en lista. Se registraron 32 issues. La ejecucion de 100 no termino por socket read timeout y no produce conteo completo.
+- Tooltip de ID 25 devolvio campos estructurados y HTML, pero stats vacias; el tooltip de ejemplo ID 12640 de la documentacion devolvio 404. La busqueda generica documentada `q=worn` no devolvio resultados agrupados; no se interpreta como ausencia del listado. No se infirieron stats ni fuentes a partir de campos vacios.
+- Eternadex es una referencia visual potencial: declara stats desde datos del cliente Forever y fuentes desde atlas de mazmorras/base de misiones, con observaciones comunitarias para vendors/loot. No se encontro API publica de datos ni licencia explicita de reutilizacion de base completa. Wowhead Forever ofrece paginas, pero no se identifico API publica autorizada para ingesta. La revision de APIs oficiales de Blizzard no encontro un endpoint Forever de catalogo documentado.
+- Los tres enlaces Wowhead guardados corresponden a verificaciones individuales previas. Esta revision reabrió los destinos: Forever de IDs 25 y 35 mostró nombres e item level coincidentes; la pagina de ID 36 mostró una pantalla anti-bot, por lo que no se repitió su comprobación. De los 8 detalles validos, 25,35,36 están en la allowlist previa; 37,38,39,40,43 siguen sin mapear. No se amplió la allowlist.
+- Recomendacion: **estrategia hibrida**: TheWoWDB para registros basicos atribuidos, fuentes complementarias solo con permiso explicito y verificacion editorial por campo/build. No basta para un planner 1-60 de las nueve clases.
+- Para iniciar un motor BIS faltan datos autorizados y versionados de stats y requisitos, restricciones clase/faccion/raza/armas, relaciones de obtencion y prerequisitos; resolucion de la contradiccion required_level; cobertura de slots/niveles, criterio explicable por spec y evidencia editorial. Ningun BIS, scoring, recomendacion ni contenido de planner fue implementado.
+
+Los resultados reproducibles, matrices por nivel/slot, endpoint inventory, licencias y limitaciones se documentan en `docs/CATALOG_COVERAGE_AUDIT.md`, `docs/ITEM_STATISTICS_AUDIT.md`, `docs/ACQUISITION_SOURCES_AUDIT.md`, `docs/PROVIDER_COMPARISON.md`, `docs/LEVELING_COVERAGE_MATRIX.md`, `docs/DATA_SOURCES.md` y `docs/DATA_QUALITY_REPORT.md`.
+
+**Decision de fase:** no declarar lista la implementacion de recomendaciones. La siguiente fase requiere aprobacion humana explicita y una decision sobre fuente autorizada complementaria y alcance inicial de cobertura.
