@@ -1,21 +1,36 @@
-# Data sources and attribution policy
+# Data sources and attribution
 
-## Current status (Phase 2)
+## Active provider
 
-No game data source is connected to the application. The review of TheWoWDB is captured in [DATA_SOURCE_AUDIT.md](DATA_SOURCE_AUDIT.md). Phase 1 recommended it for a limited catalog validation pilot, with reservations around required-level mismatches, field coverage, restrictions, acquisition sources, and licensing of icon assets.
+Phase 3 uses the documented TheWoWDB Forever item API as a bounded catalog provider. The adapter calls only the documented list and detail endpoints:
 
-The Phase 2 application does not request TheWoWDB, persist its records, or display item content. `scripts/explore_wowdb.py` remains a separately bounded research tool; it is not called by FastAPI or the frontend.
+- `GET /api/v1/forever/item/?page={page}&per_page={count}`
+- `GET /api/v1/forever/item/{id}`
 
-## Rules for a future provider adapter
+The list response exposes `total`, `has_more`, `links.next`, and the current build where supplied. The adapter follows documented pagination links only after validating the HTTPS host and Forever item path. It uses detail records for normalization and does not assume list records contain full item detail. Current documentation sets `per_page` to 1–100, pages to at most 200, a 120 request burst followed by 2 requests/second, and `Retry-After` for HTTP 429. See [TheWoWDB Developers](https://thewowdb.com/developers/) for current endpoint documentation and terms.
 
-- Keep each provider client isolated from the catalog domain and HTTP API. Normalize only fields supported by that provider, with source/version/build and observed time.
-- Keep missing and contradictory values explicit. A null or empty field is not automatically proof that an item has no restriction.
-- Never use Classic Era as a silent fallback for Forever. Any reference comparison must retain its own game/version identity.
-- Record terms URL, attribution text, allowed uses, review date, and data coverage before enabling an adapter.
-- Display required attribution next to provider data. Do not provide raw provider dataset downloads or bulk dumps.
-- Do not cache, proxy, copy, or rehost item icons unless their applicable asset terms have been reviewed.
-- Add tests using small, authorized fixtures and mocked HTTP responses. Do not put provider credentials in client-side variables.
+The client sends `If-None-Match` when it has a cached ETag and honors HTTP 304. The current cache is in-memory and bounded to the documented one-hour cache lifetime; it is not a persistent dataset cache. Requests are paced to two per second and retry transient 429/5xx/network errors with bounded backoff.
 
-## Current source decision
+## Terms and attribution
 
-TheWoWDB remains a candidate for a controlled sample only. It is not approved as the sole source for gear eligibility or acquisition provenance. No provider adapter is implemented in Phase 2.
+The published API terms reviewed for Phase 3 permit free use, including commercial use, with a visible link to TheWoWDB wherever its data is displayed. They prohibit reselling the raw dataset. Item cards and details link to the provider record and show TheWoWDB attribution. The project does not offer bulk data export. Terms should be rechecked before a new release or material change in use.
+
+Provider permission does not automatically grant a separate license for icon assets. This implementation stores and displays provider-supplied icon URLs; it does not download or rehost icons. Recheck image asset terms before proxying or redistributing those assets.
+
+## Data boundaries
+
+- TheWoWDB is an external provider, not the catalog domain model. Provider schemas and normalization live under `backend/app/ingestion/providers` and `normalizers`.
+- Every record carries provider identity, provider item ID, observed game version/build, capture timestamp, and verification status.
+- Missing and contradictory values remain unknown or are represented as a review issue. Empty arrays are not treated as proof of no stats, effects, or restrictions.
+- List/detail disagreement for `required_level` is preserved as a field-level quality issue; the normalized value is `NULL` until reviewed.
+- Market prices are not treated as faction restrictions. No faction restrictions or acquisition sources are inferred from prices or empty fields.
+- No Classic Era fallback is used.
+- No provider raw response archive or full dataset is stored. The import report contains summary counts and issue metadata only.
+
+## Wowhead links
+
+The application does not scrape Wowhead or copy its content. `wowhead_url` is populated only from a small explicit Forever mapping allowlist for IDs 25, 35, and 36, previously checked against the Phase 1 audit and matched to the current provider name and item level. An unlisted ID or mismatch produces `NULL`. This is narrow URL mapping evidence, not an assertion that equal IDs have equivalent game data. Recheck mappings when provider records/builds change.
+
+## Current suitability
+
+TheWoWDB is suitable for a controlled MVP catalog and source adapter, not as the sole authority for character eligibility or acquisition provenance. In the initial bounded run it supplied three valid item records, but all three have unresolved required-level contradictions and unverified empty stat/effect/restriction arrays. See [DATA_QUALITY_REPORT.md](DATA_QUALITY_REPORT.md) for the observed sample and limitations. No BIS or gear eligibility decision may be made from this data alone.

@@ -3,8 +3,11 @@
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 
+from backend.app import models as _models  # noqa: F401
 from backend.app.core.config import Settings
+from backend.app.db.base import Base
 from backend.app.main import create_app
 
 
@@ -22,7 +25,12 @@ def settings() -> Settings:
 
 @pytest.fixture
 def app(settings):
-    engine = create_engine("sqlite+pysqlite:///:memory:")
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
     return create_app(settings, engine=engine, db_health_check=lambda: True)
 
 

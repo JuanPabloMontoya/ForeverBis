@@ -5,6 +5,7 @@ from logging.config import fileConfig
 from alembic import context
 from backend.app.core.config import get_settings
 from backend.app.db.base import Base
+from backend.app.models import catalog as _catalog  # noqa: F401
 from sqlalchemy import engine_from_config, pool
 
 config = context.config
@@ -33,6 +34,7 @@ def run_migrations_online() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args={"connect_timeout": 5},
     )
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)

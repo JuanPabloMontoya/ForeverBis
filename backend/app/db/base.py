@@ -1,4 +1,4 @@
-"""SQLAlchemy metadata base; domain tables are intentionally not defined yet."""
+"""SQLAlchemy metadata base."""
 
 from sqlalchemy.orm import DeclarativeBase
 

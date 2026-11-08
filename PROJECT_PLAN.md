@@ -1,12 +1,12 @@
 # Forever BIS — Plan del proyecto
 
-**Estado:** Fase 2 completada; verificada en la integración PostgreSQL (7 de noviembre de 2026)  
+**Estado:** Fase 3: catalogo implementado; prototipo Gear Planner entregado para revision (7 nov 2026)
 **Investigación consultada:** 7 de noviembre de 2026  
 **Alcance:** decisiones de arquitectura, planificación y estado de ejecución por fase.
 
 ## 1. Objetivo y principios
 
-Forever BIS será un planificador de equipo de WoW Forever para niveles 1–60. Permitirá filtrar por clase, especialización, facción y nivel, y explicará por qué se recomienda cada pieza y cómo obtenerla.
+Forever BIS es ante todo un planificador de progresion de equipo nivel por nivel para WoW Forever. La experiencia principal configura clase, especializacion y faccion; la barra horizontal de niveles 1-60 conduce a un paper doll de 17 espacios. El catalogo de objetos es una herramienta secundaria y una fuente de datos interna.
 
 - WoW Forever es una fuente de datos distinta de Classic Era. No completar registros de Forever con valores de Era de forma silenciosa.
 - Cada dato publicado debe tener fuente, versión/build, fecha de captura y estado de verificación. Los campos desconocidos se representan como desconocidos.
@@ -195,3 +195,25 @@ Pytest: 23 aprobadas. Vitest: 8 aprobadas. Ruff lint y formato, TypeScript y bui
 - [Foro de Blizzard — observaciones comunitarias de la API Forever](https://us.forums.blizzard.com/en/blizzard/t/wow-forever-api-what-works-so-far-plus-a-ts-client/60334)
 - [Blizzard — condiciones de uso de API para desarrolladores](https://www.blizzard.com/es-es/legal/a2989b50-5f16-43b1-abec-2ae17cc09dd6/condiciones-de-uso-de-las-api-para-desarrolladores-de-blizzard)
 
+
+## Phase 3 — Catálogo de objetos Forever
+
+Implementado y validado el 7 de noviembre de 2026 (America/Bogota), sin iniciar recomendaciones BIS:
+
+- Se añadió el dominio SQLAlchemy para fuente, snapshot de versión/build, objeto, estadísticas, efectos, restricciones y problemas de calidad. Las migraciones nuevas son `20261107_0002` y `20261107_0003`; Alembic informa `20261107_0003 (head)` y `alembic check` confirmó que no hay diferencias pendientes. No se borraron ni reinicializaron datos o volúmenes.
+- El adaptador usa únicamente las rutas documentadas de lista y detalle de objetos Forever de TheWoWDB, valida host/ruta, límites y esquemas; gestiona paginación, ETag/304, ritmo de solicitudes, 429 y fallos transitorios. El proveedor queda desacoplado de SQLAlchemy y FastAPI.
+- La importación limita cada ejecución a 100 registros, por defecto no escribe, y requiere `--write` con confirmación o `--confirm-write`. Importación real acotada: 3 recuperados, 3 validados, 0 fallidos y 3 persistidos. Una segunda ejecución creó 0 y actualizó 3; no duplicó registros.
+- En los tres objetos muestreados, `required_level` fue 1 en lista y null en detalle. Se dejó el campo null y se guardaron ambas observaciones como problema de calidad. Las listas vacías de estadísticas, efectos y restricciones de clase quedaron marcadas como no verificadas. Los tres objetos requieren revisión. El informe detallado está en `docs/DATA_QUALITY_REPORT.md`.
+- Se guardaron tres enlaces Wowhead Forever mediante la lista explícita del informe de Fase 1, con coincidencia actual de ID, nombre y nivel de objeto; fuera de esos tres casos, la URL permanece null. No se hizo scraping ni se importó contenido protegido.
+- API de catálogo, resumen y detalle implementadas; la interfaz React consume esas rutas y muestra búsqueda, filtros, paginación, detalle, estado de verificación, incertidumbre y atribución visible. La consulta en vivo del cliente frontend al resumen/listado/detalle devolvió registros del PostgreSQL activo; Vite sirvió la aplicación con HTTP 200. Las pruebas de componente usan datos mockeados. No se completó una prueba end-to-end de navegador.
+- Verificaciones: Pytest 41 aprobadas (4 subtests); Vitest 10 aprobadas; Ruff lint y formato aprobados; TypeScript y build de producción aprobados; Compose configurado; PostgreSQL 17.6 reportó `healthy`; FastAPI health reportó aplicación y base `healthy`; migraciones y conexión SQLAlchemy confirmadas.
+- Documentación de fuentes, modelo, importación y calidad añadida en `docs/DATA_SOURCES.md`, `docs/CATALOG_DATA_MODEL.md`, `docs/CATALOG_IMPORT.md` y `docs/DATA_QUALITY_REPORT.md`; instrucciones de README actualizadas.
+
+**Alcance y limitación:** solo se importó una muestra acotada de tres objetos. Los hallazgos no representan cobertura total. La fuente resulta adecuada para el MVP de catálogo y pruebas técnicas, pero los registros actuales no bastan para establecer elegibilidad, restricciones completas, fuentes de obtención ni recomendaciones. Los términos requieren atribución visible y prohíben revender el dataset bruto; los términos de iconos no fueron verificados de forma independiente. No se implementaron cálculos BIS, puntuación, recomendaciones de subida ni listas por clase.
+
+
+## Correccion de direccion de producto - prototipo frontend
+
+La pagina principal es Gear Planner; Item Database permanece accesible como seccion secundaria. El prototipo implementa selectores de las nueve clases y sus especializaciones, faccion Alliance/Horde, progresion horizontal accesible para niveles 1-60 y la distribucion paper doll de 17 espacios. Cada espacio indica recomendacion no disponible y permite abrir registros de catalogo coincidentes; dichos registros se identifican como datos de proveedor, nunca como recomendaciones. El detalle reutiliza el catalogo existente.
+
+La base observada sigue siendo de solo tres objetos marcados `needs_review`. No se inventaron objetos, iconos ni recomendaciones. No hay calculo BIS ni cambio de ingesta o base de datos. Las pruebas frontend pasaron: 16 pruebas; TypeScript y build de produccion tambien pasaron. La revision humana del prototipo es el siguiente punto de control; no comenzar Fase 3.1 sin autorizacion.

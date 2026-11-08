@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import Engine
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from backend.app.api.v1.items import router as catalog_router
 from backend.app.api.v1.routes import application_info
 from backend.app.api.v1.routes import router as v1_router
 from backend.app.core.config import Settings, get_settings
@@ -90,6 +91,7 @@ def create_app(
         return JSONResponse(status_code=500, content=payload.model_dump())
 
     app.include_router(v1_router, prefix="/api/v1")
+    app.include_router(catalog_router, prefix="/api/v1")
     return app
 
 

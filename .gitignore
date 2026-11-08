@@ -18,6 +18,7 @@ frontend/dist/
 frontend/coverage/
 frontend/.vite/
 npm-debug.log*
+.dev-runtime/
 
 # Local configuration and secrets
 .env
