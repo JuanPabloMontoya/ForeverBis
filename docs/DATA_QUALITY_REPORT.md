@@ -40,3 +40,43 @@ The documented tooltip route returned an HTML tooltip plus plain `fields` for ID
 The current PostgreSQL data was queried read-only after the experiment: still 3 items, all `needs_review`; no new item, version or source records were added. All 3 persisted rows retain explicit Wowhead URLs from the Phase 3 audit. This review re-opened their destinations: Forever pages for IDs 25 and 35 showed the matching names and item level 2; ID 36 returned a robot-verification screen, so its prior mapping remains but could not be independently rechecked today. Among the 8 valid dry-run details, only IDs 25, 35 and 36 match the existing explicit allowlist; IDs 37, 38, 39, 40 and 43 remain unmapped. The 2 detail-404 IDs are not verified records.
 
 See [catalog coverage](CATALOG_COVERAGE_AUDIT.md), [statistics](ITEM_STATISTICS_AUDIT.md), [acquisition sources](ACQUISITION_SOURCES_AUDIT.md), [provider comparison](PROVIDER_COMPARISON.md), and [leveling matrix](LEVELING_COVERAGE_MATRIX.md) for source-specific methods and limitations.
+
+## Prompt 3 recovery and controlled write (8 November 2026)
+
+The current PostgreSQL state was checked before this work: migration `20261108_0004`, 3 items (provider IDs 25, 35, 36), 27 scoring profiles, and 9 capability profiles. The existing three catalog rows were not updated or promoted. Additive migration `20261108_0005` was then applied; Alembic reports this as the head and `alembic check` reports no model/schema drift.
+
+### Import totals
+
+Seven bounded name searches were executed through the CLI, with a maximum of 3 summaries per query. A pagination-limit defect was found during the first four queries: the importer stopped after 2 of 3 summaries. The defect was fixed; each query was then re-run as a new snapshot. Existing rows were skipped by source/build/item identity and the remaining records were imported without duplicates.
+
+| Measure | Actual result |
+|---|---:|
+| Item summaries processed in persisted snapshots | 29 |
+| New items imported | 15 |
+| Updated items | 0 |
+| Skipped as already present | 8 |
+| Detail failures (HTTP 404) | 6 |
+| Imported items marked `needs_review` | 15 |
+| Total catalog items after import | 18 |
+| Total item data snapshots | 29 |
+
+The snapshots are IDs 1–11. The first four are preserved as historical runs with two fetched records each; the corrected reruns are snapshots 5–11. Every row has an outcome record. Failures did not roll back successful rows. No raw provider JSON was written into reports; raw summary/detail payloads for all 15 imported records are held in PostgreSQL and their immutable `item_data_snapshots`.
+
+### Current coverage and uncertainty
+
+All 18 records are `needs_review`; zero are verified. The 15 new rows have raw payload and capture provenance. The 3 original rows retain their original identifying values, required-level nulls, statuses, and no raw-payload backfill. No rows contain normalized `ItemStat`, effects, restrictions, or acquisition relationships; empty arrays remain unverified, not proof of absence. Separately, the provider supplied weapon minimum/maximum damage and speed values for 9 of the 15 new records. These values are preserved as provider-reported, not manually verified; numeric armor was not supplied in this sample.
+
+| Gear Planner slot family | Rows | Notes |
+|---|---:|---|
+| Main Hand (including provider Two-Hand and One-Hand) | 9 | Weapons only; no normalized stats in the sample |
+| Back | 2 | Required level unknown |
+| Chest | 1 | Required level unknown |
+| Feet | 3 | Required level unknown |
+| Ranged | 3 | Two required levels unknown; one level 3 |
+| Head, Neck, Shoulders, Wrist, Hands, Waist, Legs, Ring, Trinket, Off Hand | 0 | No sample coverage |
+
+Required-level distribution: 12 unknown; 3 at level 3; 1 at level 4; 1 at level 11; 1 at level 20; 1 at level 33. By bands, 1–10 has 3 known values, 11–20 has 2, 21–30 has 0, 31–40 has 1, and 41–50/51–60 have 0. These counts are descriptive, not verified eligibility. The search results also included six item-detail 404s.
+
+Acquisition-source coverage is zero. The documented item detail records used here supplied no item-to-NPC, quest, vendor, profession, or instance relationship that could be persisted with evidence. No acquisition source was inferred. Existing individually mapped Wowhead Forever URLs remain on the three original rows only; none of the 15 new records received an automatically generated Wowhead URL.
+
+The live catalog summary reports 18 items, all `needs_review`. The live planner endpoint returned all 17 slots and zero recommendations. This is expected: every record is unverified, and the 27 active class/spec profiles still have empty provisional weights. No synthetic production item, scoring profile, or recommendation was added.

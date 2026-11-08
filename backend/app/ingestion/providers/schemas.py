@@ -40,6 +40,7 @@ class ItemListResponse(ProviderModel):
     build: str | None = None
     page: StrictInt = Field(ge=1)
     per_page: StrictInt = Field(ge=1, le=100)
+    q: str | None = Field(default=None, max_length=64)
     count: StrictInt = Field(ge=0)
     total: StrictInt | None = Field(default=None, ge=0)
     has_more: bool
@@ -65,6 +66,20 @@ class ItemResponse(ProviderModel):
     stats: list[Any] | None = None
     effects: list[Any] | None = None
     classes: list[Any] | None = None
+    races: list[Any] | None = None
+    factions: list[Any] | None = None
+    unique: Any = None
     icon_url: str | None = None
     links: ProviderLinks | None = None
+    attribution: ProviderAttribution | None = None
+
+
+class ItemTooltipResponse(ProviderModel):
+    """Documented tooltip envelope; HTML is intentionally not normalized or displayed."""
+
+    id: StrictInt | None = None
+    kind: str | None = None
+    version: str | None = None
+    fields: dict[str, Any] = Field(default_factory=dict)
+    html: str | None = None
     attribution: ProviderAttribution | None = None

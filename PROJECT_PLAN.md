@@ -1,6 +1,6 @@
 # Forever BIS — Plan del proyecto
 
-**Estado:** Fase 3.1: auditoria de cobertura y proveedores completada; pendiente aprobacion humana antes de la siguiente fase (7 nov 2026)
+**Estado:** MVP Prompt 2 (Gear Progression Planner) implementado y validado; revisión humana pendiente antes de Prompt 3 (8 nov 2026)
 **Investigación consultada:** 7 de noviembre de 2026  
 **Alcance:** decisiones de arquitectura, planificación y estado de ejecución por fase.
 
@@ -233,3 +233,95 @@ Completada el 7 de noviembre de 2026 (America/Bogota), con lectura de PostgreSQL
 Los resultados reproducibles, matrices por nivel/slot, endpoint inventory, licencias y limitaciones se documentan en `docs/CATALOG_COVERAGE_AUDIT.md`, `docs/ITEM_STATISTICS_AUDIT.md`, `docs/ACQUISITION_SOURCES_AUDIT.md`, `docs/PROVIDER_COMPARISON.md`, `docs/LEVELING_COVERAGE_MATRIX.md`, `docs/DATA_SOURCES.md` y `docs/DATA_QUALITY_REPORT.md`.
 
 **Decision de fase:** no declarar lista la implementacion de recomendaciones. La siguiente fase requiere aprobacion humana explicita y una decision sobre fuente autorizada complementaria y alcance inicial de cobertura.
+
+## MVP Prompt 1 - base del modelo de datos, elegibilidad y puntuacion
+
+**Progreso implementado (8 de noviembre de 2026):** se ampliaron de forma aditiva los modelos de catalogo para registrar completitud independiente de estadisticas/elegibilidad, armor/weapon numeric fields, fecha de validacion y una asociacion nullable con identidad interna de patch. Se agregaron perfiles configurables/versionados y perfiles de proficiencia por clase. La migracion `20261108_0004` deja los datos anteriores intactos, agrega perfiles provisionales sin pesos para las 27 especializaciones y capability profiles desconocidos para las nueve clases. No deriva el patch interno del build del proveedor.
+
+El motor puro separa elegibilidad y puntuacion, devuelve estados eligible/ineligible/unknown y resultados scored/provisional/incomplete, explica cada contribucion y evita puntuar items o estadisticas incompletos. La comparacion se limita a un mismo slot family; no optimiza un set de equipo. Se agregaron endpoints de lectura de perfiles, chequeo de elegibilidad, puntuacion de objeto y comparacion. Los tres registros existentes no se promueven y conservan su estado de revision; columnas nuevas quedan `unknown` por default. No se implemento recomendacion BIS, ranking de equipo completo, ingesta adicional ni cambio frontend.
+
+**Pesos:** las auditorias de proveedor no respaldan coeficientes por especializacion. Los perfiles sembrados no tienen pesos, por lo que actualmente devuelven resultado incompleto, no un score fabricado. Los pesos de pruebas son fixtures sinteticos y solo ilustran la formula. Capacidades de clase permanecen desconocidas hasta verificacion Forever.
+
+**Validaciones ejecutadas:** 58 pruebas backend pasaron; Ruff pasó; la migracion genera SQL offline correctamente y la cadena Alembic reconoce `20261108_0004` como head. La migracion no se aplico a PostgreSQL porque el daemon Docker no esta disponible en este entorno. Pruebas frontend, TypeScript y build no pudieron ejecutarse: `node` y `npm` no estan disponibles en PATH. Por ello, la aplicacion real sobre la base existente y la Definition of Done completa quedan pendientes de validacion ambiental; no se afirma que Prompt 1 este completamente verificado.
+
+## MVP Prompt 1.1 - validacion tecnica
+
+**Validacion ejecutada el 8 de noviembre de 2026:** Pytest 58/58 pasó y Ruff pasó. Los tests cubren recuperación de perfiles, endpoints de eligibility/scoring, comparación same-slot, estadísticas y restricciones desconocidas, pesos faltantes y resultados incompletos usando fixtures sintéticos en SQLite in-memory. No se crearon objetos sintéticos de producción. `alembic history` reconoce `20261108_0004` como head y `alembic upgrade head --sql` generó el SQL con las nuevas tablas y el avance de revisión.
+
+**Bloqueo PostgreSQL:** no se pudo verificar el contenedor, volúmenes, revisión actual, aplicar la migración ni consultar el esquema/registros. Docker respondió `permission denied while trying to connect to the Docker API at npipe:////./pipe/docker_engine` y también informó acceso denegado a `C:\Users\User\.docker\config.json`. Se detuvo la validación de base sin iniciar Docker ni modificar contenedores o datos. Por tanto, el estado actual de los tres registros y la presencia en PostgreSQL de los 27 perfiles/nueve capability profiles no se confirman. El código de migración agrega campos/tablas y hace inserts de perfiles; no contiene updates ni deletes de items. Las migraciones anteriores no fueron modificadas.
+
+**Bloqueo frontend:** `where.exe node` y `where.exe npm` no encontraron ejecutables. Existe `frontend/package-lock.json`; no se instalaron paquetes ni se ejecutaron Vitest, TypeScript o build.
+
+**Cierre:** Prompt 1 no se marca como técnicamente validado. Faltan la verificación real de PostgreSQL y las comprobaciones frontend. No se inicia Prompt 2 sin completar esos checks y recibir aprobación humana.
+
+## MVP Prompt 1.2 - validacion final de entorno local
+
+**Base de datos — PASS:** `python -m alembic current` inicialmente reportó `20261107_0003`. Se verificó conexión por la `DATABASE_URL` existente a la base `foreverbis`; `docker info`, `docker ps` y `docker inspect` no pudieron acceder al daemon por `permission denied while trying to connect to the Docker API at npipe:////./pipe/docker_engine` y acceso denegado a `C:\Users\User\.docker\config.json`. La inspección de contenedor/volumen como objetos Docker queda **BLOCKED**, pero la conexión PostgreSQL directa y las consultas SQL funcionaron.
++
++La migración pendiente se aplicó con `python -m alembic upgrade 20261108_0004` (salida: upgrade `20261107_0003 -> 20261108_0004`). Después, `alembic current` reportó `20261108_0004`. La inspección de `information_schema` confirmó las cinco tablas nuevas (`forever_patches`, `scoring_profiles`, `class_capability_profiles`, `acquisition_sources`, `item_acquisitions`) y ocho columnas nuevas en `items`/`game_versions`.
++
++La comparación de los campos originales de los tres objetos contra la lectura previa a la migración fue exacta: `items_match_pre_migration_snapshot=True`, 3/3. Los tres continúan `needs_review`, con `eligibility_status=unknown` y `statistics_status=unknown`. No hay filas de stats, efectos ni restricciones en el catálogo; los doce quality issues originales permanecen (requisito de nivel discrepante y arrays de stats/efectos/classes sin semántica verificada). Se encontraron 27 scoring profiles, todos activos, provisionales y con pesos vacíos, y nueve capability profiles, todos `unknown` y con listas de armadura/armas NULL. No existen tablas de recomendaciones. Las aserciones de integridad de la consulta pasaron; no se detectó pérdida o promoción de datos.
++
++**Backend — PASS:** `python -m pytest`: 58 passed. `ruff check backend alembic`: All checks passed. FastAPI se inició para smoke test con `python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000` y luego se cerró limpiamente. `GET /api/v1/health` devolvió `healthy`, `database=healthy`; `GET /api/v1/scoring-profiles` devolvió 27; para el objeto real 1, eligibility devolvió `unknown`, scoring devolvió `incomplete` y score NULL; comparación real del mismo slot (IDs 1 y 3) devolvió ambos `incomplete`, `ranked=false`. No se generaron recomendaciones BIS.
++
++**Frontend — BLOCKED:** `node --version` y `npm --version` fallaron porque los ejecutables no se encuentran en PATH. Se comprobaron rutas estándar de instalación y tampoco existían allí. El lockfile `frontend/package-lock.json` existe; no se ejecutó `npm ci`, Vitest, TypeScript ni build y no se modificaron dependencias.
++
++**Cierre Prompt 1:** validación backend y PostgreSQL completada; inspección de Docker y validación frontend permanecen bloqueadas en esta sesión. En consecuencia Prompt 1 todavía no se marca técnicamente validado según la Definition of Done completa. Prompt 2 no se inició.
+
+### Actualizacion final de Prompt 1.2 — cierre tecnico
+
+La evidencia local de Docker compartida por el desarrollador confirma `docker version` con Engine 29.9.2, `docker ps` con `foreverbis-db-1` Up/healthy y el volumen persistente `foreverbis_forever_bis_postgres_data`. Mi sandbox no tiene permiso para abrir el named pipe Docker ni el archivo de configuracion del usuario; por ello no repeti esas consultas desde la sesion del agente. La base PostgreSQL, sin embargo, fue consultada directamente con la configuracion del proyecto, y su estado se verifico después de la migracion.
+
+Node/npm se validaron usando la ruta WinGet indicada: npm 11.19.0. `npm ci` no se necesitó porque `frontend/node_modules` ya existía y se usó el `package-lock.json` existente sin cambios de dependencias. `npm test`: 2 archivos y 16 tests pasaron; `npm run typecheck`: pasó; `npm run build`: pasó con Vite 8.3.6.
+
+**Estado final:** PASS en migración PostgreSQL, comparación íntegra de los tres objetos, estados no verificados/desconocidos, 27 perfiles provisionales vacíos, nueve capabilities desconocidas, 58 pruebas backend, Ruff, health real de FastAPI/PostgreSQL, smoke tests de perfiles/elegibilidad/scoring/comparación y pruebas/typecheck/build frontend. No hubo filas BIS/recomendaciones almacenadas ni objetos sintéticos en producción. Se marca **Prompt 1 técnicamente validado**. Prompt 2 no se inició.
+
+## MVP Prompt 2.1 — planner de progresión
+
+**Estado verificado el 8 de noviembre de 2026:** se reanudó el trabajo existente sin descartar cambios previos. El planner permanece como página principal y Item Database sigue en navegación secundaria. La interfaz consume perfiles y recomendaciones del backend, ofrece los nueve nombres de clase derivados de los perfiles activos, especializaciones de los perfiles disponibles, Alliance/Horde, niveles 1–60 con controles de teclado/anterior/siguiente y 17 slots. Los slots permiten abrir el resultado y consultar registros de catálogo etiquetados explícitamente como registros, no como recomendaciones. Los detalles muestran contribuciones de puntuación, incertidumbre/procedencia y enlaces Wowhead solo cuando el registro tiene estado `verified`.
+
+El endpoint `GET /api/v1/planner/recommendations` agrega resultados con los servicios backend existentes de elegibilidad y comparación; no duplica scoring en TypeScript ni hace optimización de conjunto. Solo incluye recomendación si scoring es completo, elegibilidad es `eligible`, el item está `verified` y availability es `available`. Provisionalidad, pesos vacíos, campos desconocidos y datos incompletos producen estados explicativos. No se añadieron migraciones ni se modificó el catálogo.
+
+**Validación ejecutada:** Pytest **61 passed**; `ruff check backend alembic`: **All checks passed**; Vitest **19 passed** en 2 archivos; `npm run typecheck`: pasó; `npm run build`: pasó (Vite 8.3.6). No se requirió `npm ci`; se usaron los `node_modules` y lockfile presentes con Node 24.20.0/npm 11.19.0. `alembic current` reporta `20261108_0004 (head)`.
+
+El smoke test con `dev.ps1 -NoBrowser` confirmó Docker Engine 29.9.2, contenedor Compose `db` saludable, conectividad SQLAlchemy, FastAPI y Vite en ejecución. `GET /api/v1/health` devolvió aplicación/base `healthy`; `GET /api/v1/scoring-profiles` devolvió 27 perfiles activos; una preflight CORS desde `http://localhost:5173` fue aceptada y Vite respondió HTTP 200. Una consulta real de `Warrior / Arms / Alliance / level 1` devolvió **17 slots y 0 recomendaciones**, con perfil no configurado/provisional. La lectura de PostgreSQL confirmó tres items (IDs internos 1, 2, 3; provider IDs 25, 35, 36), todos `needs_review`, elegibilidad y completitud de estadísticas `unknown`; existen 27 perfiles activos y los 27 tienen pesos vacíos. El resultado vacío es el comportamiento esperado con estos datos; no se crearon registros sintéticos en producción ni recomendaciones almacenadas.
+
+**Límites de verificación:** no se hizo inspección visual en navegador real ni prueba end-to-end browser-driven porque no hay herramienta de navegador disponible en esta sesión. La interfaz estática incluye breakpoints responsive y las interacciones se cubren con pruebas React; Vite/API fueron comprobados por HTTP y CORS, pero el flujo de navegador no se presenta como validado. No se optimiza el conjunto completo (incluida la selección de dos anillos/abalorios distintos), no hay pesos validados ni recomendaciones reales con el catálogo vigente.
+
+**Cierre:** Prompt 2 queda implementado y validado en backend, frontend, tipo/compilación y smoke de servicios. La cobertura de datos impide recomendaciones en vivo, por lo que no se afirma que exista BIS utilizable ni selección óptima del conjunto. Prompt 3 no se inició.
+
+## Prompt 3 — recuperación, catálogo y contribuciones (8 de noviembre de 2026)
+
+### Recuperación inicial
+
+- El repositorio ya tenía cambios no confirmados de Prompt 1/2. Se preservaron; no se limpió ni se reescribió su historial.
+- PostgreSQL respondía por la configuración existente. Antes de esta fase la revisión era `20261108_0004`, había tres objetos `needs_review`, 27 perfiles provisionales con pesos vacíos y nueve capability profiles desconocidos. No se reinició Docker ni el volumen.
+- No se encontró un snapshot/import de Prompt 3 previo al reinicio. Se revisaron los 3 objetos originales antes de escribir. La lectura posterior confirmó que sus campos de identidad/nivel/slot y estado original permanecieron sin cambios.
+
+### Implementado y ejecutado
+
+- Migración aditiva `20261108_0005_import_history_and_suggestions` aplicada sobre `20261108_0004`; `alembic current` muestra `20261108_0005 (head)` y `alembic check` no detecta drift. Se agregaron procedencia cruda, calidad de datos, metadatos de adquisición, snapshots de importación y sugerencias.
+- El adaptador TheWoWDB cubre los endpoints documentados de lista, detalle, búsqueda, tooltip y rutas permitidas de NPC/quest; implementa límites, timeouts, pacing, ETag/304 y retries acotados. Los payloads originales se conservan en PostgreSQL/snapshots, no se exponen por API ni se exportan en reportes.
+- El importador tiene lotes máximo 100, dry-run por defecto, confirmación explícita, snapshots, checkpoints por registro, reanudación, idempotencia y reportes por outcome. Una ejecución acotada de siete búsquedas importó **15** registros reales y persistió seis fallos HTTP 404 y ocho omisiones por IDs ya existentes; cero updates. Detectado y corregido durante esa ejecución un doble decremento del límite que detenía prematuramente los primeros cuatro lotes. Las búsquedas corregidas completaron el cupo sin duplicar filas.
+- El catálogo actual contiene **18** objetos: los tres originales y 15 nuevos; todos están en `needs_review`, ninguno en `verified`. No se insertaron estadísticas, efectos, restricciones ni fuentes de adquisición sin evidencia.
+- El planner consulta el catálogo a través de los servicios existentes de elegibilidad/comparación. La consulta HTTP real devolvió 17 slots y cero recomendaciones. Las 27 especializaciones siguen sin pesos configurados; la ausencia de recomendaciones es intencional.
+- El panel de slot admite sugerencias Wowhead Forever y evidencia opcional. El API valida dominio, formato, contexto clase/spec existente y guarda `pending_review`; repetidos con el mismo ID/contexto se conservan y se marcan como posibles duplicados. No hay autenticación real: no se publicaron rutas administrativas. El flujo local lista y decide submissions mediante `backend.app.ingestion.review_cli`; aprobar una sugerencia no verifica ni importa el objeto.
+- Los snapshots y sus campos modificados están disponibles para revisión; no se creó ningún patch interno ficticio ni se publican recomendaciones automáticamente.
+
+### Cobertura verificada y límites
+
+El lote alcanzó familias de slot Main Hand (9 registros raw, incluyendo One-Hand/Two-Hand del proveedor), Back (2), Chest (1), Feet (3) y Ranged (3). Los otros 12 slot families permanecen sin cobertura. Los niveles requeridos son desconocidos en 12 de 18 filas; los seis valores conocidos se distribuyen en 1–10: 3, 11–20: 2, 31–40: 1, y cero en las bandas superiores. En los 18 registros no hay estadísticas o fuentes de adquisición persistidas. Los 15 nuevos conservan payload y snapshots; los originales no fueron reescritos ni recibieron backfill crudo. Solo siguen presentes los tres enlaces Wowhead Forever previamente verificados; no se generalizó compatibilidad de IDs.
+
+TheWoWDB sigue sin ofrecer evidencia suficiente para una progresión BIS nivel a nivel. La muestra es real y atribuida, pero está incompleta: seis detalles dieron 404, faltan stats y adquisición, casi todos los niveles requeridos son desconocidos, los slots están concentrados y los pesos continúan provisionales/vacíos. No hay objetos utilizables para una recomendación confirmada.
+
+### Validación ejecutada
+
+- Backend: `pytest backend/tests` **64 passed**; `ruff check backend alembic`: **All checks passed**; `ruff format --check backend alembic`: **60 files already formatted**.
+- Migración: upgrade 0004→0005 aplicado, `alembic check` sin operaciones pendientes, DB sigue accesible.
+- Frontend: Vitest **20 passed**, `npm run typecheck` y `npm run build` pasaron. No se reinstalaron/actualizaron paquetes.
+- Smoke HTTP contra los servicios ya activos: FastAPI health 200 (`healthy`, PostgreSQL `healthy`), catalog summary 18, planner 17 slots/0 recomendaciones, Vite 200 y CORS para `http://localhost:5173`.
+- Con autorización del usuario, `stop-dev.ps1` detuvo los servicios de aplicación registrados y `dev.ps1 -NoBrowser` reinició FastAPI/Vite. Confirmó Docker Engine 29.9.2, PostgreSQL Compose healthy y conexión SQLAlchemy. No se detuvo ni recreó el contenedor/volumen. No se hizo browser-driven visual testing; se validaron HTTP, CORS y componentes con pruebas.
+
+### Estado
+
+Prompt 3 entrega el flujo técnico de importación acotada, la persistencia real y el ingreso comunitario sin bypass de recomendación. Quedan bloqueadas las recomendaciones reales hasta contar con stats/restricciones/adquisición verificadas y perfiles de scoring validados. No se inició Prompt 4; no se hizo commit ni push.

@@ -41,11 +41,31 @@ class ItemRestrictionRead(CatalogModel):
     verification_status: str
 
 
+class AcquisitionSourceRead(CatalogModel):
+    source_type: str
+    name: str | None
+    external_id: str | None
+    location: str | None
+    zone_name: str | None
+    difficulty: str | None
+    faction_requirement: str | None
+    conditions: dict[str, object] | None
+    source_url: str | None
+    verification_status: str
+    captured_at: datetime | None
+
+
+class ItemAcquisitionRead(CatalogModel):
+    verification_status: str
+    requirements: str | None
+    acquisition_source: AcquisitionSourceRead
+
+
 class DataQualityIssueRead(CatalogModel):
     field_name: str
     issue_code: str
     message: str
-    observed_values: dict[str, object] | list[object] | None
+    observed_values: dict[str, object] | list[object] | str | int | float | bool | None
 
 
 class CatalogItemRead(CatalogModel):
@@ -61,8 +81,19 @@ class CatalogItemRead(CatalogModel):
     icon_url: str | None
     source_item_url: str | None
     wowhead_url: str | None
+    armor_value: float | None
+    weapon_damage_min: float | None
+    weapon_damage_max: float | None
+    weapon_speed: float | None
     availability_status: str
     verification_status: str
+    data_quality_status: str
+    field_provenance: dict[str, str]
+    eligibility_status: str
+    statistics_status: str
+    last_validated_at: datetime | None
+    imported_at: datetime | None
+    last_successful_refresh_at: datetime | None
     created_at: datetime
     updated_at: datetime
     source: CatalogSourceRead
@@ -70,6 +101,7 @@ class CatalogItemRead(CatalogModel):
     stats: list[ItemStatRead]
     effects: list[ItemEffectRead]
     restrictions: list[ItemRestrictionRead]
+    acquisitions: list[ItemAcquisitionRead]
     quality_issues: list[DataQualityIssueRead]
 
 

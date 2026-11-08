@@ -7,7 +7,7 @@ from typing import Literal
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.models.catalog import DataSource, Item
+from backend.app.models.catalog import DataSource, Item, ItemAcquisition
 
 SortField = Literal["name", "quality", "item_level", "required_level", "updated_at"]
 
@@ -20,6 +20,7 @@ def item_load_options():
         selectinload(Item.effects),
         selectinload(Item.restrictions),
         selectinload(Item.quality_issues),
+        selectinload(Item.acquisitions).selectinload(ItemAcquisition.acquisition_source),
     )
 
 

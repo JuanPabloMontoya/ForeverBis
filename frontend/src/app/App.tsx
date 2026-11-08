@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   fetchCatalogSummary,
   fetchItem,
@@ -6,8 +6,10 @@ import {
   type CatalogItem,
   type CatalogSummary,
 } from '../api/catalog'
+import GearPlanner from '../features/planner/GearPlanner'
 
 type RequestState = 'loading' | 'ready' | 'error'
+type PlannerPageName = 'planner' | 'catalog'
 
 function qualityTone(quality: string | null): string {
   const known = ['poor', 'common', 'uncommon', 'rare', 'epic', 'legendary', 'artifact']
@@ -21,7 +23,10 @@ function qualityLabel(quality: string | null): string {
 }
 
 function verificationLabel(status: string): string {
-  return status === 'needs_review' ? 'Needs review' : 'Provider reported'
+  if (status === 'verified') return 'Verified'
+  if (status === 'needs_review') return 'Needs review'
+  if (status === 'provider_reported') return 'Provider reported'
+  return 'Verification unknown'
 }
 
 function issueFor(item: CatalogItem, field: string) {
@@ -112,7 +117,10 @@ function ItemDetail({ item, onClose }: { item: CatalogItem; onClose: () => void 
           <div><dt>Required level</dt><dd><RequiredLevel item={item} /></dd></div>
           <div><dt>Equipment slot</dt><dd>{item.inventory_type ?? 'Unknown'}</dd></div>
           <div><dt>Armor type</dt><dd>{item.armor_type ?? 'Unknown'}</dd></div>
+          {item.armor_value !== null && <div><dt>Armor</dt><dd>{item.armor_value}</dd></div>}
           <div><dt>Weapon type</dt><dd>{item.weapon_type ?? 'Unknown'}</dd></div>
+          {item.weapon_damage_min !== null && item.weapon_damage_max !== null && <div><dt>Weapon damage</dt><dd>{item.weapon_damage_min}–{item.weapon_damage_max}</dd></div>}
+          {item.weapon_speed !== null && <div><dt>Weapon speed</dt><dd>{item.weapon_speed}</dd></div>}
           <div><dt>Availability</dt><dd>{item.availability_status === 'unknown' ? 'Unknown' : item.availability_status}</dd></div>
         </dl>
 
@@ -138,6 +146,14 @@ function ItemDetail({ item, onClose }: { item: CatalogItem; onClose: () => void 
             </li>)}</ul>
           ) : <p>{restrictionsUnverified ? 'No class restrictions reported; unrestricted use is not established.' : 'Restrictions are unavailable.'}</p>}
         </section>
+        <section className="detail-subsection">
+          <h3>Acquisition</h3>
+          {item.acquisitions.length ? (
+            <ul>{item.acquisitions.map((entry, index) => <li key={`${entry.acquisition_source.source_type}-${index}`}>
+              {entry.acquisition_source.source_type}: {entry.acquisition_source.name ?? 'Name unknown'} · {entry.verification_status}
+            </li>)}</ul>
+          ) : <p>Acquisition source is not verified in the catalog.</p>}
+        </section>
 
         {item.quality_issues.length > 0 && (
           <section className="quality-issues" aria-labelledby="quality-issues-heading">
@@ -153,7 +169,7 @@ function ItemDetail({ item, onClose }: { item: CatalogItem; onClose: () => void 
           <a href={item.source_item_url ?? item.source.base_url} target="_blank" rel="noreferrer">
             {item.source.attribution_text}
           </a>
-          {item.wowhead_url && (
+          {item.wowhead_url && item.verification_status === 'verified' && (
             <a className="wowhead-link" href={item.wowhead_url} target="_blank" rel="noreferrer">
               Open verified Wowhead Forever page ↗
             </a>
@@ -348,248 +364,6 @@ function CatalogPage({ onNavigate }: { onNavigate: (page: 'planner' | 'catalog')
       {selectedId !== null && detailLoading && <div className="detail-backdrop"><div className="catalog-state" role="status">Loading item details…</div></div>}
       {selectedId !== null && detailError && <div className="detail-backdrop" role="alert"><div className="catalog-state catalog-error"><p>{detailError}</p><button className="secondary-button" onClick={closeItem}>Close</button></div></div>}
       {selectedItem && <ItemDetail item={selectedItem} onClose={closeItem} />}
-    </div>
-  )
-}
-
-type PlannerPageName = 'planner' | 'catalog'
-type Slot = { name: string; mark: string }
-
-const CLASS_SPECS: Record<string, string[]> = {
-  Druid: ['Balance', 'Feral', 'Restoration'],
-  Hunter: ['Beast Mastery', 'Marksmanship', 'Survival'],
-  Mage: ['Arcane', 'Fire', 'Frost'],
-  Paladin: ['Holy', 'Protection', 'Retribution'],
-  Priest: ['Discipline', 'Holy', 'Shadow'],
-  Rogue: ['Assassination', 'Combat', 'Subtlety'],
-  Shaman: ['Elemental', 'Enhancement', 'Restoration'],
-  Warlock: ['Affliction', 'Demonology', 'Destruction'],
-  Warrior: ['Arms', 'Fury', 'Protection'],
-}
-
-const LEFT_SLOTS: Slot[] = [
-  { name: 'Head', mark: 'HD' }, { name: 'Neck', mark: 'NK' },
-  { name: 'Shoulders', mark: 'SH' }, { name: 'Back', mark: 'BK' },
-  { name: 'Chest', mark: 'CH' }, { name: 'Wrist', mark: 'WR' },
-  { name: 'Hands', mark: 'HN' }, { name: 'Waist', mark: 'WA' },
-  { name: 'Legs', mark: 'LG' }, { name: 'Feet', mark: 'FT' },
-]
-
-const RIGHT_SLOTS: Slot[] = [
-  { name: 'Ring 1', mark: 'R1' }, { name: 'Ring 2', mark: 'R2' },
-  { name: 'Trinket 1', mark: 'T1' }, { name: 'Trinket 2', mark: 'T2' },
-  { name: 'Main Hand', mark: 'MH' }, { name: 'Off Hand', mark: 'OH' },
-  { name: 'Ranged', mark: 'RG' },
-]
-
-function LevelProgression({ level, onChange }: { level: number; onChange: (level: number) => void }) {
-  const selectedButton = useRef<HTMLButtonElement | null>(null)
-  const levels = Array.from({ length: 60 }, (_, index) => index + 1)
-
-  useEffect(() => {
-    selectedButton.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-  }, [level])
-
-  function moveTo(next: number) {
-    const bounded = Math.min(60, Math.max(1, next))
-    onChange(bounded)
-    requestAnimationFrame(() => document.getElementById(`level-${bounded}`)?.focus())
-  }
-
-  return (
-    <section className="level-progression" aria-labelledby="level-heading">
-      <div className="level-heading-row">
-        <div><p className="eyebrow">Your journey</p><h2 id="level-heading">Level progression</h2></div>
-        <div className="level-current" aria-live="polite"><span>LEVEL</span><strong>{level}</strong></div>
-      </div>
-      <div className="level-track-shell">
-        <span className="level-boundary">1</span>
-        <div className="level-track" role="group" aria-label="Choose a character level">
-          {levels.map((value) => (
-            <button
-              key={value}
-              id={`level-${value}`}
-              ref={value === level ? selectedButton : null}
-              type="button"
-              className={`level-step${value === level ? ' is-selected' : ''}`}
-              aria-label={`Level ${value}`}
-              aria-pressed={value === level}
-              onClick={() => onChange(value)}
-              onKeyDown={(event) => {
-                if (event.key === 'ArrowRight') { event.preventDefault(); moveTo(value + 1) }
-                if (event.key === 'ArrowLeft') { event.preventDefault(); moveTo(value - 1) }
-                if (event.key === 'Home') { event.preventDefault(); moveTo(1) }
-                if (event.key === 'End') { event.preventDefault(); moveTo(60) }
-              }}
-            >{value}</button>
-          ))}
-        </div>
-        <span className="level-boundary">60</span>
-      </div>
-      <p className="level-progress-note">Select any level. Gear data for this character and level is currently unavailable.</p>
-    </section>
-  )
-}
-
-function EquipmentSlot({ slot, onSelect }: { slot: Slot; onSelect: (slot: string) => void }) {
-  return (
-    <button
-      className="paperdoll-slot"
-      type="button"
-      aria-label={`${slot.name}: recommendation unavailable. View catalog records`}
-      onClick={() => onSelect(slot.name)}
-    >
-      <span className="paperdoll-slot-mark" aria-hidden="true">{slot.mark}</span>
-      <span className="paperdoll-slot-copy"><strong>{slot.name}</strong><small>Recommendation unavailable</small></span>
-      <span className="slot-unavailable" aria-hidden="true">—</span>
-    </button>
-  )
-}
-
-function GearPlanner({ onNavigate }: { onNavigate: (page: PlannerPageName) => void }) {
-  const [characterClass, setCharacterClass] = useState('Warrior')
-  const [specialization, setSpecialization] = useState(CLASS_SPECS.Warrior[0])
-  const [faction, setFaction] = useState('Alliance')
-  const [level, setLevel] = useState(1)
-  const [activeSlot, setActiveSlot] = useState<string | null>(null)
-  const [slotRecords, setSlotRecords] = useState<CatalogItem[]>([])
-  const [slotState, setSlotState] = useState<RequestState>('ready')
-  const [slotError, setSlotError] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
-  const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [detailError, setDetailError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (activeSlot === null) return
-    const controller = new AbortController()
-    setSlotState('loading')
-    setSlotError(null)
-    setSlotRecords([])
-    fetchItems({ inventory_type: activeSlot, page: 1, page_size: 24, sort_by: 'name', sort_order: 'asc' }, controller.signal)
-      .then((result) => { setSlotRecords(result.items); setSlotState('ready') })
-      .catch((reason: unknown) => {
-        if (controller.signal.aborted) return
-        setSlotError(reason instanceof Error ? reason.message : 'Catalog records could not be loaded.')
-        setSlotState('error')
-      })
-    return () => controller.abort()
-  }, [activeSlot])
-
-  useEffect(() => {
-    if (selectedId === null) return
-    const controller = new AbortController()
-    setSelectedItem(null)
-    setDetailLoading(true)
-    setDetailError(null)
-    fetchItem(selectedId, controller.signal)
-      .then(setSelectedItem)
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted) setDetailError(reason instanceof Error ? reason.message : 'Item details unavailable.')
-      })
-      .finally(() => { if (!controller.signal.aborted) setDetailLoading(false) })
-    return () => controller.abort()
-  }, [selectedId])
-
-  function changeClass(nextClass: string) {
-    setCharacterClass(nextClass)
-    setSpecialization(CLASS_SPECS[nextClass][0])
-  }
-
-  return (
-    <div className="app-shell">
-      <header className="site-header">
-        <a className="brand" href="#planner" aria-label="Forever BIS home">
-          <span className="brand-mark" aria-hidden="true">FB</span>
-          <span className="brand-copy"><strong>Forever BIS</strong><small>Level-by-level gear planner</small></span>
-        </a>
-        <nav className="header-nav" aria-label="Main navigation">
-          <button className="nav-active" type="button" aria-current="page">Gear Planner</button>
-          <button type="button" onClick={() => onNavigate('catalog')}>Item Database</button>
-          <a href="#guides" aria-disabled="true" onClick={(event) => event.preventDefault()}>Guides</a>
-          <a href="#about" aria-disabled="true" onClick={(event) => event.preventDefault()}>About</a>
-        </nav>
-        <span className="planner-status-pill"><span className="status-dot status-pending" />Planner preview</span>
-      </header>
-
-      <main id="planner" className="main-content planner-page">
-        <section className="planner-hero">
-          <div>
-            <p className="eyebrow">World of Warcraft: Forever</p>
-            <h1>Gear for every <span>step of the journey.</span></h1>
-            <p>Set your character and level, then explore the equipment layout. Verified gear recommendations are not available yet.</p>
-          </div>
-          <div className="planner-crest" aria-hidden="true"><span>FB</span></div>
-        </section>
-
-        <section className="planner-config" aria-label="Character configuration">
-          <label className="planner-field"><span>Class</span><select value={characterClass} onChange={(event) => changeClass(event.target.value)}>
-            {Object.keys(CLASS_SPECS).map((name) => <option key={name} value={name}>{name}</option>)}
-          </select></label>
-          <label className="planner-field"><span>Specialization</span><select value={specialization} onChange={(event) => setSpecialization(event.target.value)}>
-            {CLASS_SPECS[characterClass].map((name) => <option key={name} value={name}>{name}</option>)}
-          </select></label>
-          <label className="planner-field"><span>Faction</span><select value={faction} onChange={(event) => setFaction(event.target.value)}>
-            <option>Alliance</option><option>Horde</option>
-          </select></label>
-          <div className="character-context" aria-live="polite"><span>Planning for</span><strong>{characterClass} · {specialization}</strong><small>{faction} · Level {level}</small></div>
-        </section>
-
-        <LevelProgression level={level} onChange={setLevel} />
-
-        <section className="paperdoll-panel" aria-labelledby="equipment-heading">
-          <div className="paperdoll-heading">
-            <div><p className="eyebrow">Character equipment</p><h2 id="equipment-heading">Your gear at level {level}</h2></div>
-            <span className="unavailable-legend"><i aria-hidden="true">—</i> Recommendation unavailable</span>
-          </div>
-          <div className="paperdoll-layout">
-            <div className="slot-group slot-group-left" aria-label="Armor slots">
-              {LEFT_SLOTS.map((slot) => <EquipmentSlot key={slot.name} slot={slot} onSelect={setActiveSlot} />)}
-            </div>
-            <div className="character-figure" aria-label={`Character preview: ${characterClass}`}>
-              <div className="figure-halo" aria-hidden="true" />
-              <div className="figure-silhouette" aria-hidden="true"><span className="figure-head" /><span className="figure-body" /><span className="figure-cape" /></div>
-              <span className="figure-class">{characterClass}</span>
-              <span className="figure-level">Level {level}</span>
-            </div>
-            <div className="slot-group slot-group-right" aria-label="Jewelry and weapon slots">
-              {RIGHT_SLOTS.map((slot) => <EquipmentSlot key={slot.name} slot={slot} onSelect={setActiveSlot} />)}
-            </div>
-          </div>
-          <div className="recommendation-unavailable" role="status">
-            <span className="empty-state-icon" aria-hidden="true">✦</span>
-            <div><strong>No verified gear recommendations for this selection</strong><p>The catalog currently contains only three records, all marked for review. No item is being presented as best-in-slot, an alternative, an easy pickup, or an upgrade.</p></div>
-          </div>
-        </section>
-
-        <footer className="page-footer"><span>Forever BIS · Level progression planner</span><span>Catalog records are not gear recommendations</span></footer>
-      </main>
-
-      {activeSlot !== null && (
-        <div className="detail-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setActiveSlot(null)}>
-          <section className="slot-record-panel" role="dialog" aria-modal="true" aria-labelledby="slot-record-heading">
-            <button className="detail-close" type="button" aria-label="Close slot records" onClick={() => setActiveSlot(null)}>×</button>
-            <p className="eyebrow">{characterClass} · {specialization} · {faction} · Level {level}</p>
-            <h2 id="slot-record-heading">{activeSlot}</h2>
-            <div className="slot-not-recommendation"><strong>Recommendation unavailable</strong><span>These are provider catalog records for this slot, not recommendations for your character.</span></div>
-            {slotState === 'loading' && <div className="catalog-state" role="status">Loading matching catalog records…</div>}
-            {slotState === 'error' && <div className="catalog-state catalog-error" role="alert">{slotError}</div>}
-            {slotState === 'ready' && slotRecords.length === 0 && <div className="catalog-state" role="status"><strong>No matching catalog records reported</strong><p>This does not establish that the slot has no obtainable items.</p></div>}
-            {slotState === 'ready' && slotRecords.length > 0 && (
-              <div className="slot-record-list">
-                {slotRecords.map((item) => <button className="slot-record-card" type="button" key={item.id} onClick={() => { setActiveSlot(null); setSelectedId(item.id) }}>
-                  {item.icon_url ? <img src={item.icon_url} alt="" /> : <span className="slot-record-no-icon" aria-hidden="true">?</span>}
-                  <span><strong>{item.name}</strong><small>{item.quality ?? 'Quality unknown'} · {item.item_level === null ? 'Item level unknown' : `Item level ${item.item_level}`}</small><small>{item.verification_status === 'needs_review' ? 'Needs review' : 'Provider reported'}</small></span>
-                </button>)}
-              </div>
-            )}
-            <button className="secondary-button" type="button" onClick={() => { setActiveSlot(null); onNavigate('catalog') }}>Open Item Database</button>
-          </section>
-        </div>
-      )}
-      {selectedId !== null && detailLoading && <div className="detail-backdrop"><div className="catalog-state" role="status">Loading item details…</div></div>}
-      {selectedId !== null && detailError && <div className="detail-backdrop" role="alert"><div className="catalog-state catalog-error"><p>{detailError}</p><button className="secondary-button" onClick={() => setSelectedId(null)}>Close</button></div></div>}
-      {selectedItem && <ItemDetail item={selectedItem} onClose={() => { setSelectedId(null); setSelectedItem(null) }} />}
     </div>
   )
 }

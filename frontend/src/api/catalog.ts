@@ -20,8 +20,15 @@ export type CatalogItem = {
   icon_url: string | null
   source_item_url: string | null
   wowhead_url: string | null
+  armor_value: number | null
+  weapon_damage_min: number | null
+  weapon_damage_max: number | null
+  weapon_speed: number | null
   availability_status: string
   verification_status: string
+  eligibility_status: string
+  statistics_status: string
+  last_validated_at: string | null
   created_at: string
   updated_at: string
   source: CatalogSource
@@ -32,6 +39,18 @@ export type CatalogItem = {
     restriction_type: string
     restriction_value: string
     verification_status: string
+  }>
+  acquisitions: Array<{
+    verification_status: string
+    requirements: string | null
+    acquisition_source: {
+      source_type: string
+      name: string | null
+      external_id: string | null
+      location: string | null
+      source_url: string | null
+      verification_status: string
+    }
   }>
   quality_issues: Array<{
     field_name: string

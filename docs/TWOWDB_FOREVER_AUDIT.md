@@ -71,3 +71,7 @@ TheWoWDB resulta útil para una API inicial de identidades, build y estructura b
 - [TheWoWDB Forever database](https://thewowdb.com/wow-forever/items/)
 - [DATA_QUALITY_REPORT.md](DATA_QUALITY_REPORT.md)
 - [CATALOG_COVERAGE_AUDIT.md](CATALOG_COVERAGE_AUDIT.md)
+
+## Prompt 3 implementation update (8 November 2026)
+
+This historical source audit is supplemented by a real controlled import: 29 item summaries were processed across 11 persisted snapshots. Fifteen new records were imported, eight repeated source/build/item rows were skipped, six item detail calls returned HTTP 404, and no rows were updated. All new rows retain provider payload, build, capture data and field provenance, but remain `needs_review`. The imported sample has no `ItemStat`, effect, restriction or acquisition-source rows; nine weapon records do retain provider-supplied damage range and speed. See [the current data quality report](DATA_QUALITY_REPORT.md) and [coverage audit](CATALOG_COVERAGE_AUDIT.md).

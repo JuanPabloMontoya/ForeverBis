@@ -63,3 +63,9 @@ This uses only documented list/detail routes, observes the adapter pacing, and m
 - [Eternadex item database and stated data methodology](https://eternadex.com/en/datenbank/)
 - [Eternadex About and sources](https://eternadex.com/en/ueber/)
 - [Eternadex data contribution process](https://eternadex.com/en/beitragen/)
+
+## Prompt 3 current PostgreSQL coverage (8 November 2026)
+
+The live bounded import added 15 provider records; with the three original catalog rows, the database now has 18 records. Raw provider slot coverage is `Main Hand` 4, `One-Hand` 1, `Two-Hand` 4, `Back` 2, `Chest` 1, `Feet` 3 and `Ranged` 3. These collapse to only five planner families: main hand (9), back (2), chest (1), feet (3), ranged (3). The remaining 12 planner families have no records. Every catalog row is `needs_review`.
+
+Twelve rows have unknown required level. Known values are level 3 (two rows), level 4 (one), level 11 (one), level 20 (one), and level 33 (one). The known-level bands therefore have 3 records at 1–10, 2 at 11–20, 0 at 21–30, 1 at 31–40, and 0 at 41–50/51–60. None of the 18 records has persisted item stats or acquisition relations. The live `/api/v1/catalog/coverage` endpoint reports these counts, including the `unknown` level band. This remains sample coverage, not catalog completeness.

@@ -49,3 +49,7 @@ Esta combinación todavía **no permite un catálogo suficientemente confiable**
 - [Wowhead Tooltips / XML information](https://www.wowhead.com/tooltips)
 - [Wowhead ToS (Fanbyte/ZAM)](https://corp.fanbyte.com/legal/terms?zaf_referer=https://www.wowhead.com/)
 - Ejemplos: [Worn Shortsword 25](https://www.wowhead.com/forever/item=25/worn-shortsword), [Bent Staff 35](https://www.wowhead.com/forever/item=35/bent-staff), [Premier Mail Helm 272486](https://www.wowhead.com/forever/item=272486/premier-mail-helm), [Mender's Mail Boots pattern 252899](https://www.wowhead.com/forever/item=252899/pattern-menders-mail-boots).
+
+## Prompt 3 live implementation update (8 November 2026)
+
+The bounded TheWoWDB workflow has since been implemented and executed using the official list/detail API, without Wowhead scraping. Eleven persisted snapshots processed 29 summaries: 15 new items, 8 skipped existing rows, 6 detail 404 failures, and 0 updates. All 15 new records are `needs_review`; no stats arrays or acquisition relations were persisted. Provider weapon ranges/speeds appeared on 9 records. Wowhead remains manual-link/reference only; the 15 new IDs received no Wowhead mappings. The live sample still cannot support a level-by-level planner; broader provider work requires authorized nonempty stats, acquisition, and item-eligibility evidence.

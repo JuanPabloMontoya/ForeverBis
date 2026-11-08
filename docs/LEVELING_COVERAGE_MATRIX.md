@@ -73,3 +73,9 @@ TheWoWDB's 8 previously validated details are all item level 1–2 and have unkn
 | 51–60 | Visible example at required level 55. | 0 verified; no sample detail with confirmed required level. | Example exists; level 60 and broader availability not established. |
 
 **Overall:** Wowhead pages indicate public item visibility across parts of the level range; TheWoWDB has an authorized structured API but this live session did not permit the requested 30-record validation. Neither source, in the access mode permitted by the evidence reviewed, supports a complete local progression catalog for nine classes and all 17 slots.
+
+## Prompt 3 actual imported sample (8 November 2026)
+
+The persisted TheWoWDB data now has six known required-level values: 3, 3, 4, 11, 20 and 33. Twelve of 18 total catalog rows have unknown required level. This gives 3 known records in levels 1–10, 2 in 11–20, none in 21–30, 1 in 31–40, and none in 41–50 or 51–60. These records are all `needs_review`; counts do not represent eligible or verified gear. No confirmed progression is supported.
+
+Historical note: statements above describing only three persisted TheWoWDB records refer to the end of Phase 3.2, before Prompt 3 population. Current persisted counts and unknown-level bands are in the Prompt 3 update section.

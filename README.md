@@ -2,7 +2,7 @@
 
 Forever BIS is a WoW Forever level-by-level gear progression planner built with React/TypeScript and FastAPI. Its homepage is the Gear Planner prototype with character selectors, a selectable 1–60 progression strip, and a 17-slot equipment paper doll. Item Database is a secondary section backed by the Phase 3 bounded, source-aware catalog. Verified recommendations are not available, so the planner shows explicit unavailable states and never fills slots with invented gear.
 
-Catalog data is supplied by the documented TheWoWDB Forever API, with visible attribution. Unknown and conflicting values remain unknown or under review. The initial live sample has three items and is not a completeness claim. See [the data quality report](docs/DATA_QUALITY_REPORT.md) before using the fields. The application does not silently substitute Classic Era data or redistribute provider datasets.
+Catalog data is supplied by TheWoWDB's documented Forever API, with visible attribution. Unknown and conflicting values remain unknown or under review. The current local sample contains 18 items, all marked `needs_review`; it is not a completeness claim and cannot generate confirmed recommendations. See [the data quality report](docs/DATA_QUALITY_REPORT.md) before using the fields. The application does not silently substitute Classic Era data or redistribute provider datasets.
 
 ## Requirements
 
@@ -142,9 +142,18 @@ npm run build
 - `GET /api/v1/items`: paginated and sortable listing; supports search, quality, equipment slot, required-level range, source, and verification filters.
 - `GET /api/v1/items/{item_id}`: item detail, stats/effects/restrictions, source/build, field-level quality issues, attribution, and verified external links.
 - `GET /api/v1/catalog/summary`: total count, counts by quality and verification state, last import, and active data sources.
+- `GET /api/v1/catalog/coverage`: item counts by provider slot, required-level band, and verification status.
+- `GET /api/v1/catalog/imports`: paginated import history; `/api/v1/catalog/imports/{id}/records` lists normalized outcomes without raw payloads.
+- `GET /api/v1/patches`: internal patch identifiers and statuses; no fictional patches are created.
+- `POST /api/v1/suggestions` and `GET /api/v1/suggestions/{id}`: submit a pending suggestion using a validated Forever item URL and check its status.
 - `GET /api/v1/health`: application and database health.
+- `GET /api/v1/scoring-profiles`: active class/specialization scoring profiles and their provisional/configuration state.
+- `POST /api/v1/items/{item_id}/eligibility`, `POST /api/v1/items/{item_id}/score`, and `POST /api/v1/items/compare`: item-level eligibility and scoring contracts.
+- `GET /api/v1/planner/recommendations`: per-slot planner results for class, specialization, faction, and level. It returns all 17 slots and only includes a primary recommendation when verification, availability, eligibility, and score are confirmed.
 
-The Gear Planner provides class/spec/faction selectors, level navigation, equipment slots, and honest unavailable states. The secondary Item Database provides search and filters, page navigation, catalog summary, item detail, uncertainty labels, and TheWoWDB attribution.
+The Gear Planner is the homepage and uses backend profile and planner APIs. The secondary Item Database keeps its search and filters, page navigation, catalog summary, item detail, uncertainty labels, and TheWoWDB attribution. Current profile weights are intentionally empty and all 18 real catalog records remain `needs_review`; therefore the live planner returns no recommendations. This is an expected safe state, not a complete gear list. See [the planner guide](docs/GEAR_PLANNER.md) and [recommendation flow](docs/RECOMMENDATION_FLOW.md).
+
+There is no public administrative review endpoint because the repository has no real authentication. Local operators can inspect with `python -m backend.app.ingestion.review_cli pending`, then decide with `python -m backend.app.ingestion.review_cli decide <uuid> approved|rejected|needs_info --notes "..."`. Approval does not verify or import an item. Details: [community workflow](docs/COMMUNITY_CONTRIBUTIONS.md), [verification](docs/DATA_VERIFICATION.md), [patch snapshots](docs/PATCH_SNAPSHOTS.md).
 
 ## Repository map
 
@@ -162,4 +171,4 @@ The Gear Planner provides class/spec/faction selectors, level navigation, equipm
 
 ## Phase scope
 
-Phase 3 establishes the item catalog and import pipeline only. No BIS engine, gear scoring, leveling recommendation, or class-specific equipment list has been implemented. See [PROJECT_PLAN.md](PROJECT_PLAN.md) for phase status and [DATA_SOURCES.md](docs/DATA_SOURCES.md) for source limitations and attribution rules.
+The Prompt 1 scoring foundation provides configurable individual item weights, eligibility checks, explainable scoring, and same-slot comparison. The Prompt 2 planner aggregates those existing backend results into a level-by-level interface; it does not optimize a complete equipment set. No verified specialization weights or item evidence currently support live BIS recommendations. Community suggestions and review workflow are future work and are not implemented. See [PROJECT_PLAN.md](PROJECT_PLAN.md) for phase status and [DATA_SOURCES.md](docs/DATA_SOURCES.md) for source limitations and attribution rules.

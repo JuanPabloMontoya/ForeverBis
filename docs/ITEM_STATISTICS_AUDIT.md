@@ -42,3 +42,7 @@ Wowhead Forever pages can serve as an individual cross-check only where the exac
 5. Reconciliation rules for list/detail disagreements, with unresolved values staying unknown.
 
 References: [TheWoWDB API](https://thewowdb.com/developers/), [Eternadex database methodology](https://eternadex.com/en/datenbank/), [Eternadex About](https://eternadex.com/en/ueber/), [Eternadex tooltip embed terms](https://eternadex.com/en/tooltips/).
+
+## Prompt 3 imported sample update (8 November 2026)
+
+The PostgreSQL sample now includes 15 bounded TheWoWDB imports in addition to the three original rows. No `ItemStat` records were normalized, because all sampled detail `stats` arrays were empty. No effect/proc entries were normalized. For 9 of the 15 imported items, the detail payload did include weapon damage minimum/maximum and speed; these values are stored in the structured weapon fields and labeled `provider_supplied`, but have not been checked against in-game Forever data. Numeric armor was not present in the persisted sample. Required level is known in six imported rows and unknown in nine imported rows; the three original list/detail conflicts remain unknown as before. All 18 catalog records remain `needs_review`, so provider-reported weapon fields cannot be used as validated score inputs.

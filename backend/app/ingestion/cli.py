@@ -20,7 +20,17 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     import_parser = commands.add_parser("import-items", help="Import at most 100 Forever items")
     import_parser.add_argument("--limit", type=int, default=10)
-    import_parser.add_argument("--per-page", type=int, default=100)
+    import_parser.add_argument("--per-page", type=int, default=20)
+    import_parser.add_argument("--search", help="Documented Forever item-name query (max 64 chars)")
+    import_parser.add_argument(
+        "--resume-snapshot", type=int, help="Resume a partial import snapshot"
+    )
+    import_parser.add_argument(
+        "--refresh", action="store_true", help="Refresh matching unverified records using ETags"
+    )
+    import_parser.add_argument(
+        "--patch-id", type=int, help="Internal patch ID; never inferred from provider build"
+    )
     import_parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -52,8 +62,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(f"--limit must be between 1 and {MAX_IMPORT_LIMIT}")
     if args.per_page < 1 or args.per_page > MAX_IMPORT_LIMIT:
         parser.error(f"--per-page must be between 1 and {MAX_IMPORT_LIMIT}")
+    if args.search is not None and (not args.search.strip() or len(args.search) > 64):
+        parser.error("--search must contain 1 to 64 characters")
     if args.dry_run and (args.write or args.confirm_write):
         parser.error("--dry-run cannot be combined with --write or --confirm-write")
+    if args.resume_snapshot is not None and not (args.write or args.confirm_write):
+        parser.error("--resume-snapshot requires explicit --write or --confirm-write")
     if args.write and args.confirm_write:
         parser.error("Use either --write or --confirm-write, not both")
 
@@ -61,7 +75,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.write:
         try:
             confirmation = input(
-                f"Import up to {args.limit} items from TheWoWDB into PostgreSQL? Type IMPORT: "
+                f"Import up to {args.limit} TheWoWDB summaries into PostgreSQL? Type IMPORT: "
             )
         except EOFError:
             confirmation = ""
@@ -82,6 +96,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     per_page=args.per_page,
                     session=session,
                     dry_run=False,
+                    search=args.search,
+                    resume_snapshot_id=args.resume_snapshot,
+                    refresh=args.refresh,
+                    patch_id=args.patch_id,
                 )
         else:
             report = import_items(
@@ -89,6 +107,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 limit=args.limit,
                 per_page=args.per_page,
                 dry_run=True,
+                search=args.search,
             )
     except Exception as exc:
         logging.getLogger(__name__).error("Catalog import failed: %s", exc)
@@ -102,7 +121,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(rendered + "\n", encoding="utf-8")
-    return 0 if report["validated"] else 2
+    return 2 if report.get("status") in {"partial", "failed"} else 0
 
 
 if __name__ == "__main__":

@@ -5,10 +5,12 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from backend.app.models.catalog import (
+    AcquisitionSource,
     DataQualityIssue,
     DataSource,
     GameVersion,
     Item,
+    ItemAcquisition,
     ItemStat,
 )
 
@@ -119,6 +121,32 @@ def test_item_detail_returns_stats_provenance_and_external_links(client, app):
     assert detail["game_version"]["build"] == "test-build"
     assert detail["source_item_url"].startswith("https://thewowdb.com/")
     assert detail["wowhead_url"].startswith("https://www.wowhead.com/forever/")
+    assert detail["acquisitions"] == []
+
+
+def test_item_acquisition_provenance_is_returned_when_recorded(client, app):
+    staff_id, _ = seed_catalog(app)
+    with Session(app.state.engine) as session, session.begin():
+        acquisition = AcquisitionSource(
+            source_type="quest", name="Synthetic quest fixture", verification_status="needs_review"
+        )
+        session.add(acquisition)
+        session.flush()
+        session.add(
+            ItemAcquisition(
+                item_id=staff_id,
+                acquisition_source_id=acquisition.id,
+                verification_status="needs_review",
+                requirements="Test-only fixture.",
+            )
+        )
+    response = client.get(f"/api/v1/items/{staff_id}")
+    assert response.status_code == 200
+    assert (
+        response.json()["acquisitions"][0]["acquisition_source"]["name"]
+        == "Synthetic quest fixture"
+    )
+    assert response.json()["acquisitions"][0]["verification_status"] == "needs_review"
 
 
 def test_item_detail_not_found_and_filter_validation(client):
@@ -126,3 +154,14 @@ def test_item_detail_not_found_and_filter_validation(client):
     invalid = client.get("/api/v1/items?min_level=20&max_level=10")
     assert invalid.status_code == 422
     assert invalid.json()["code"] == "http_error"
+
+
+def test_catalog_coverage_reports_unknown_levels_and_import_history(client):
+    coverage = client.get("/api/v1/catalog/coverage")
+    assert coverage.status_code == 200
+    assert coverage.json()["total"] == 0
+    assert coverage.json()["by_required_level_band"]["unknown"] == 0
+    assert coverage.json()["items_with_statistics"] == 0
+    assert coverage.json()["items_with_acquisition_sources"] == 0
+    assert client.get("/api/v1/catalog/imports?page=1&page_size=10").json() == []
+    assert client.get("/api/v1/patches").json() == []

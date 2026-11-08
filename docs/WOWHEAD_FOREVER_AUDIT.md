@@ -59,3 +59,11 @@ Las fuentes visibles no tienen un grado uniforme de certeza: la página del patr
 - [Tooltips, XML y ejemplos](https://www.wowhead.com/tooltips)
 - [FAQ de Wowhead: actualización por aportes](https://www.wowhead.com/faq)
 - [Términos de servicio de Fanbyte/ZAM](https://corp.fanbyte.com/legal/terms?zaf_referer=https://www.wowhead.com/)
+
+## Prompt 3 local-link coverage update (8 November 2026)
+
+The local catalog has 18 rows after the bounded TheWoWDB import. The only three stored Wowhead Forever URLs remain the individually checked links for source IDs 25, 35, and 36. The 15 newly imported provider IDs have no stored Wowhead links; no URL was generated from ID equality, and no Wowhead fetch or scrape occurred. Existing links remain visible in the UI only when the catalog record itself is `verified`; all 18 records are currently `needs_review`, so no Wowhead link is shown as a verified recommendation link today.
+
+## Prompt 3 local-link coverage update (8 November 2026)
+
+The local catalog has 18 rows after the bounded TheWoWDB import. The only three stored Wowhead Forever URLs remain the individually checked links for source IDs 25, 35, and 36. The 15 newly imported provider IDs have no stored Wowhead links; no URL was generated from ID equality, and no Wowhead fetch or scrape occurred. Existing links are rendered as verified links only when the catalog item itself is verified; all 18 current records are `needs_review`, so no verified recommendation link is currently shown.

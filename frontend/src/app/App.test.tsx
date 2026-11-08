@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogItem, CatalogPage, CatalogSummary } from '../api/catalog'
 import * as catalogApi from '../api/catalog'
+import type { GearPlan, PlannerCandidate, PlannerSlot, ScoringProfile } from '../api/planner'
+import * as plannerApi from '../api/planner'
 import App from './App'
 
 vi.mock('../api/catalog', () => ({
@@ -9,8 +11,50 @@ vi.mock('../api/catalog', () => ({
   fetchItems: vi.fn(),
   fetchItem: vi.fn(),
 }))
+vi.mock('../api/planner', () => ({
+  fetchScoringProfiles: vi.fn(),
+  fetchGearPlan: vi.fn(),
+  submitItemSuggestion: vi.fn(),
+}))
 
 const api = vi.mocked(catalogApi)
+const planner = vi.mocked(plannerApi)
+
+const profiles: ScoringProfile[] = [
+  ['Druid', ['Balance', 'Feral', 'Restoration']],
+  ['Hunter', ['Beast Mastery', 'Marksmanship', 'Survival']],
+  ['Mage', ['Arcane', 'Fire', 'Frost']],
+  ['Paladin', ['Holy', 'Protection', 'Retribution']],
+  ['Priest', ['Discipline', 'Holy', 'Shadow']],
+  ['Rogue', ['Assassination', 'Combat', 'Subtlety']],
+  ['Shaman', ['Elemental', 'Enhancement', 'Restoration']],
+  ['Warlock', ['Affliction', 'Demonology', 'Destruction']],
+  ['Warrior', ['Arms', 'Fury', 'Protection']],
+].flatMap(([className, specs]) => (specs as string[]).map((specialization, index) => ({
+  id: index + 1,
+  class_name: className as string,
+  specialization,
+  role: null,
+  version: 'v1-provisional',
+  active: true,
+  provisional: true,
+  assumptions: 'No validated weights.',
+  stat_weights: {},
+  adjustments: {},
+})))
+
+const slotNames = ['Head', 'Neck', 'Shoulders', 'Back', 'Chest', 'Wrist', 'Hands', 'Waist', 'Legs', 'Feet', 'Ring 1', 'Ring 2', 'Trinket 1', 'Trinket 2', 'Main Hand', 'Off Hand', 'Ranged']
+const emptyPlan: GearPlan = {
+  character: { class_name: 'Warrior', specialization: 'Arms', faction: 'Alliance', level: 1 },
+  profile_version: 'v1-provisional',
+  profile_provisional: true,
+  profile_configured: false,
+  profile_assumptions: 'No validated weights.',
+  slots: slotNames.map((slot): PlannerSlot => ({
+    slot, slot_family: slot, status: 'unavailable', recommendation: null, alternatives: [],
+    eligible_count: 0, incomplete_count: 0, explanation: ['No verified candidate data is available.'],
+  })),
+}
 
 const summary: CatalogSummary = {
   total_items: 2,
@@ -42,8 +86,15 @@ const item: CatalogItem = {
   icon_url: 'https://render.worldofwarcraft.com/us/icons/56/inv_sword_04.jpg',
   source_item_url: 'https://thewowdb.com/wow-forever/item/worn-shortsword-25/',
   wowhead_url: 'https://www.wowhead.com/forever/item=25/worn-shortsword',
+  armor_value: null,
+  weapon_damage_min: null,
+  weapon_damage_max: null,
+  weapon_speed: null,
   availability_status: 'unknown',
   verification_status: 'needs_review',
+  eligibility_status: 'unknown',
+  statistics_status: 'unknown',
+  last_validated_at: null,
   created_at: '2026-11-08T02:35:07Z',
   updated_at: '2026-11-08T02:35:07Z',
   source: summary.active_data_sources[0],
@@ -51,6 +102,7 @@ const item: CatalogItem = {
   stats: [],
   effects: [],
   restrictions: [],
+  acquisitions: [],
   quality_issues: [
     {
       field_name: 'required_level',
@@ -81,6 +133,46 @@ const item: CatalogItem = {
 
 const pageOne: CatalogPage = { items: [item], page: 1, page_size: 24, total: 2, pages: 2 }
 const pageTwo: CatalogPage = { items: [{ ...item, id: 2, source_item_id: 35, name: 'Bent Staff' }], page: 2, page_size: 24, total: 2, pages: 2 }
+const verifiedFixtureItem: CatalogItem = {
+  ...item,
+  name: 'Synthetic verified helm fixture',
+  inventory_type: 'Head',
+  required_level: 1,
+  availability_status: 'available',
+  verification_status: 'verified',
+  eligibility_status: 'verified',
+  statistics_status: 'verified',
+  wowhead_url: null,
+  quality_issues: [],
+  stats: [{ stat_type: 'Intellect', value: 3 }],
+}
+const validCandidate: PlannerCandidate = {
+  item: verifiedFixtureItem,
+  result: {
+    item_id: verifiedFixtureItem.id,
+    item_name: verifiedFixtureItem.name,
+    status: 'scored',
+    score: 6,
+    eligibility: { status: 'eligible', reasons: ['Verified test fixture.'] },
+    contributions: [{ stat_type: 'intellect', value: 3, weight: 2, contribution: 6 }],
+    missing_information: [],
+    unsupported_statistics: [],
+    unweighted_statistics: [],
+    provisional: false,
+    profile_version: 'fixture-profile-v1',
+    calculation_version: 'weighted-item-score-v1',
+  },
+  score_difference: null,
+}
+const planWithRecommendation: GearPlan = {
+  ...emptyPlan,
+  profile_provisional: false,
+  profile_configured: true,
+  profile_version: 'fixture-profile-v1',
+  slots: emptyPlan.slots.map((slot) => slot.slot === 'Head'
+    ? { ...slot, status: 'recommended', recommendation: validCandidate, explanation: ['Backend scored verified fixture.'] }
+    : slot),
+}
 
 async function renderCatalog() {
   render(<App />)
@@ -93,6 +185,8 @@ beforeEach(() => {
   api.fetchCatalogSummary.mockResolvedValue(summary)
   api.fetchItems.mockResolvedValue(pageOne)
   api.fetchItem.mockResolvedValue(item)
+  planner.fetchScoringProfiles.mockResolvedValue(profiles)
+  planner.fetchGearPlan.mockResolvedValue(emptyPlan)
 })
 
 afterEach(() => vi.restoreAllMocks())
@@ -149,14 +243,14 @@ describe('Forever item catalog', () => {
     expect(api.fetchItems).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }), expect.any(AbortSignal))
   })
 
-  it('loads item details and only renders a mapped Forever Wowhead link', async () => {
+  it('loads item details and hides external links on unverified catalog rows', async () => {
     await renderCatalog()
     fireEvent.click(await screen.findByRole('button', { name: 'View Worn Shortsword details' }))
     const dialog = await screen.findByRole('dialog', { name: 'Worn Shortsword' })
     expect(within(dialog).getByText('Required level under review · list 1 / detail unknown')).toBeInTheDocument()
     expect(within(dialog).getByText(/No stats reported; completeness is unverified/)).toBeInTheDocument()
     expect(within(dialog).getAllByText(/unrestricted use is not established/)).toHaveLength(2)
-    expect(within(dialog).getByRole('link', { name: /Wowhead Forever/ })).toHaveAttribute('href', item.wowhead_url)
+    expect(within(dialog).queryByRole('link', { name: /Wowhead Forever/ })).not.toBeInTheDocument()
     expect(api.fetchItem).toHaveBeenCalledWith(item.id, expect.any(AbortSignal))
   })
 
@@ -197,65 +291,148 @@ describe('Forever item catalog', () => {
 })
 
 describe('Gear Planner', () => {
-  it('is the homepage and offers all nine classes and both factions', () => {
+  it('is the homepage and populates all nine classes from scoring profiles', async () => {
     render(<App />)
     expect(screen.getByRole('heading', { name: /Gear for every step of the journey/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Item Database' })).toBeInTheDocument()
-    expect(screen.getAllByRole('option', { name: /^(Druid|Hunter|Mage|Paladin|Priest|Rogue|Shaman|Warlock|Warrior)$/ })).toHaveLength(9)
+    const classSelector = await screen.findByRole('combobox', { name: 'Class' })
+    expect(within(classSelector).getAllByRole('option')).toHaveLength(9)
     expect(screen.getByRole('combobox', { name: 'Faction' })).toHaveDisplayValue('Alliance')
+    await waitFor(() => expect(planner.fetchGearPlan).toHaveBeenCalledWith(
+      { class_name: 'Warrior', specialization: 'Arms', faction: 'Alliance', level: 1 },
+      expect.any(AbortSignal),
+    ))
   })
 
-  it('provides 60 selectable levels with highlighted selection and keyboard boundaries', () => {
+  it('provides 60 selectable levels, keyboard boundaries and a previous/next control', async () => {
     render(<App />)
     const progression = screen.getByRole('group', { name: 'Choose a character level' })
     const buttons = within(progression).getAllByRole('button', { name: /^Level \d+$/ })
     expect(buttons).toHaveLength(60)
     expect(within(progression).getByRole('button', { name: 'Level 1' })).toHaveAttribute('aria-pressed', 'true')
-
+    expect(screen.getByRole('button', { name: 'Previous level' })).toBeDisabled()
     fireEvent.click(within(progression).getByRole('button', { name: 'Level 42' }))
     expect(within(progression).getByRole('button', { name: 'Level 42' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.keyDown(within(progression).getByRole('button', { name: 'Level 42' }), { key: 'ArrowRight' })
     expect(within(progression).getByRole('button', { name: 'Level 43' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.keyDown(within(progression).getByRole('button', { name: 'Level 43' }), { key: 'End' })
     expect(within(progression).getByRole('button', { name: 'Level 60' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Next level' })).toBeDisabled()
     fireEvent.keyDown(within(progression).getByRole('button', { name: 'Level 60' }), { key: 'ArrowRight' })
     expect(within(progression).getByRole('button', { name: 'Level 60' })).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => expect(planner.fetchGearPlan).toHaveBeenLastCalledWith(
+      { class_name: 'Warrior', specialization: 'Arms', faction: 'Alliance', level: 60 },
+      expect.any(AbortSignal),
+    ))
   })
 
-  it('updates specialization options when class changes and keeps character context visible', () => {
+  it('updates class-specific specs and refreshes on class, faction and level changes', async () => {
     render(<App />)
-    fireEvent.change(screen.getByRole('combobox', { name: 'Class' }), { target: { value: 'Druid' } })
+    const classSelector = await screen.findByRole('combobox', { name: 'Class' })
+    fireEvent.change(classSelector, { target: { value: 'Druid' } })
     expect(screen.getByRole('combobox', { name: 'Specialization' })).toHaveDisplayValue('Balance')
-    expect(screen.getAllByRole('option', { name: /^(Balance|Feral|Restoration)$/ })).toHaveLength(3)
+    expect(within(screen.getByRole('combobox', { name: 'Specialization' })).getAllByRole('option')).toHaveLength(3)
     fireEvent.change(screen.getByRole('combobox', { name: 'Specialization' }), { target: { value: 'Restoration' } })
     fireEvent.change(screen.getByRole('combobox', { name: 'Faction' }), { target: { value: 'Horde' } })
-    expect(screen.getByText('Druid · Restoration')).toBeInTheDocument()
-    expect(screen.getByText('Horde · Level 1')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Level 24' }))
+    await waitFor(() => expect(planner.fetchGearPlan).toHaveBeenLastCalledWith(
+      { class_name: 'Druid', specialization: 'Restoration', faction: 'Horde', level: 24 },
+      expect.any(AbortSignal),
+    ))
+    expect(screen.getByText(/Druid.*Restoration/)).toBeInTheDocument()
+    expect(screen.getByText(/Horde.*Level 24/)).toBeInTheDocument()
   })
 
-  it('shows all 17 slots as unavailable and opens real catalog item details from a matching slot', async () => {
+  it('renders all 17 slots and clear no-recommendation states', async () => {
     render(<App />)
+    await screen.findByRole('combobox', { name: 'Class' })
     expect(document.querySelectorAll('.paperdoll-slot')).toHaveLength(17)
-    const mainHand = screen.getByRole('button', { name: /Main Hand: recommendation unavailable/ })
-    fireEvent.click(mainHand)
-    expect(await screen.findByRole('heading', { name: 'Main Hand' })).toBeInTheDocument()
-    expect(screen.getByText(/not recommendations for your character/)).toBeInTheDocument()
-    fireEvent.click(await screen.findByRole('button', { name: /Worn Shortsword/ }))
-    expect(await screen.findByRole('dialog', { name: 'Worn Shortsword' })).toBeInTheDocument()
-    expect(api.fetchItems).toHaveBeenCalledWith(expect.objectContaining({ inventory_type: 'Main Hand' }), expect.any(AbortSignal))
-    expect(api.fetchItem).toHaveBeenCalledWith(item.id, expect.any(AbortSignal))
+    expect(await screen.findByText(/no scoring weights configured/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Main Hand: No recommendation available/ })).toBeInTheDocument()
   })
 
-  it('distinguishes no matching catalog records from a recommendation or empty equipped slot', async () => {
-    api.fetchItems.mockResolvedValue({ ...pageOne, items: [], total: 0, pages: 0 })
+  it('shows a valid backend recommendation, alternative and item score details', async () => {
+    const alternative: PlannerCandidate = {
+      ...validCandidate,
+      item: { ...verifiedFixtureItem, id: 2, name: 'Synthetic alternative fixture' },
+      result: { ...validCandidate.result, item_id: 2, item_name: 'Synthetic alternative fixture', score: 4 },
+      score_difference: 2,
+    }
+    planner.fetchGearPlan.mockResolvedValue({
+      ...planWithRecommendation,
+      slots: planWithRecommendation.slots.map((slot) => slot.slot === 'Head'
+        ? { ...slot, alternatives: [alternative] }
+        : slot),
+    })
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /Head: recommendation unavailable/ }))
-    expect(await screen.findByText('No matching catalog records reported')).toBeInTheDocument()
-    expect(screen.getByText('This does not establish that the slot has no obtainable items.')).toBeInTheDocument()
+    const recommendedSlot = await screen.findByRole('button', { name: /Head: Synthetic verified helm fixture/ })
+    expect(recommendedSlot).toHaveTextContent('6')
+    fireEvent.click(recommendedSlot)
+    expect(await screen.findByText('Recommended item')).toBeInTheDocument()
+    expect(screen.getByText('Alternatives')).toBeInTheDocument()
+    expect(screen.getByText('Synthetic alternative fixture')).toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: 'View item and score details' })[0])
+    expect(await screen.findByRole('heading', { name: 'Worn Shortsword' })).toBeInTheDocument()
+    expect(document.querySelector('.planner-score-detail')).toHaveTextContent(/Score 6.*Eligibility: eligible/)
+    expect(screen.getByText('intellect: 3 × 2 = 6')).toBeInTheDocument()
+    expect(screen.getByText('Acquisition source is not verified in the catalog.')).toBeInTheDocument()
   })
 
-  it('keeps the item database secondary and provides navigation back to the planner', async () => {
+  it('explains unknown eligibility and keeps incomplete candidates out of recommendations', async () => {
+    planner.fetchGearPlan.mockResolvedValue({
+      ...emptyPlan,
+      slots: emptyPlan.slots.map((slot) => slot.slot === 'Head'
+        ? { ...slot, status: 'insufficient_data', incomplete_count: 1, explanation: ['Equipment eligibility is unknown.', 'Statistics completeness is not verified.'] }
+        : slot),
+    })
     render(<App />)
+    const head = await screen.findByRole('button', { name: /Head: Insufficient verified data/ })
+    expect(head).toBeInTheDocument()
+    fireEvent.click(head)
+    expect(await screen.findAllByText(/Equipment eligibility is unknown/)).toHaveLength(2)
+    expect(screen.queryByText('Recommended item')).not.toBeInTheDocument()
+  })
+
+  it('shows recommendation API errors without fabricating slot contents', async () => {
+    planner.fetchGearPlan.mockRejectedValue(new Error('API offline'))
+    render(<App />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('API offline')
+    expect(screen.getByRole('button', { name: /Main Hand: No recommendation available/ })).toBeInTheDocument()
+  })
+
+  it('submits a Wowhead Forever contribution for the selected planner context', async () => {
+    planner.submitItemSuggestion.mockResolvedValue({
+      id: '00000000-0000-0000-0000-000000000001',
+      status: 'pending_review',
+      duplicate_flagged: false,
+      submitted_at: '2026-11-08T00:00:00Z',
+    })
+    render(<App />)
+    const head = await screen.findByRole('button', { name: /Head: No recommendation available/ })
+    fireEvent.click(head)
+    fireEvent.change(screen.getByLabelText('Item name'), { target: { value: 'Suggested test item' } })
+    fireEvent.change(screen.getByLabelText('Wowhead Forever item URL'), {
+      target: { value: 'https://www.wowhead.com/forever/item=123/test-item' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }))
+    expect(await screen.findByText(/was submitted for review/)).toBeInTheDocument()
+    expect(planner.submitItemSuggestion).toHaveBeenCalledWith(expect.objectContaining({
+      class_name: 'Warrior', specialization: 'Arms', faction: 'Alliance',
+      character_level: 1, equipment_slot: 'head', suggested_item_name: 'Suggested test item',
+    }))
+  })
+
+  it('reports profile API errors and keeps selectors unavailable', async () => {
+    planner.fetchScoringProfiles.mockRejectedValue(new Error('profiles offline'))
+    render(<App />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('profiles offline')
+    expect(screen.getByRole('combobox', { name: 'Class' })).toBeDisabled()
+    expect(planner.fetchGearPlan).not.toHaveBeenCalled()
+  })
+
+  it('keeps the item database secondary and navigation working', async () => {
+    render(<App />)
+    await screen.findByRole('combobox', { name: 'Class' })
     fireEvent.click(screen.getByRole('button', { name: 'Item Database' }))
     expect(await screen.findByRole('heading', { name: 'Forever items' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Gear Planner' }))

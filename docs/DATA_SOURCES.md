@@ -25,7 +25,7 @@ Provider permission does not automatically grant a separate license for icon ass
 - List/detail disagreement for `required_level` is preserved as a field-level quality issue; the normalized value is `NULL` until reviewed.
 - Market prices are not treated as faction restrictions. No faction restrictions or acquisition sources are inferred from prices or empty fields.
 - No Classic Era fallback is used.
-- No provider raw response archive or full dataset is stored. The import report contains summary counts and issue metadata only.
+- No full provider dataset is stored or exported. Since Prompt 3, raw payloads for the bounded sample are retained locally in PostgreSQL for provenance and auditing, but never returned by public APIs or JSON reports.
 
 ## Wowhead links
 
@@ -50,3 +50,11 @@ Additional endpoint inventory, field-level limits, attribution and usage status 
 This comparison covers only **Wowhead Forever** and **TheWoWDB Forever**. Wowhead pages and the Item Finder expose useful manual fields and per-item links, but the public tooltips/XML page is not a Forever-specific bulk API contract, and Wowhead/Fanbyte terms restrict crawler/agent downloading absent authorization. Use pages for manual verification and external links only. TheWoWDB remains the structured source suitable for attributed local records, but the prior 10-summary sample had only 8 valid details, unresolved level conflicts and empty stats/effect/class arrays; current 30-item list/detail requests timed out before producing a complete report. No current phase data was imported. See [Wowhead Forever audit](WOWHEAD_FOREVER_AUDIT.md), [TheWoWDB Forever audit](TWOWDB_FOREVER_AUDIT.md), [two-provider comparison](PROVIDER_COMPARISON.md) and [updated leveling matrix](LEVELING_COVERAGE_MATRIX.md).
 
 Recommendation: **restricted hybrid**—TheWoWDB for fields available through its documented, attributed API; Wowhead for manual cross-checks and explicit Forever links. This is not enough to publish a reliable level-by-level catalog. Do not automate Wowhead extraction or fill TheWoWDB gaps with other game-version data.
+
+## Prompt 3 current implementation (8 November 2026)
+
+The adapter now allows the documented item list with optional `q`, item detail, cross-kind Forever search, tooltip, NPC, and quest paths. Production import uses list `q` and item detail; it does not use Wowhead automation. Pagination, ETags/304, one-hour response cache (tooltip five minutes), 0.51-second request pacing, explicit timeouts, bounded retries, and per-record HTTP failure handling are implemented. Search results are discovery only; detail 404s are recorded as failures.
+
+The current bounded sample contains 18 catalog rows: the three original rows and 15 newly imported TheWoWDB records. Every row is `needs_review`; the new records retain original provider payload, field provenance, capture time, and per-import snapshot. The current API schema does not provide a verified item-to-NPC/quest/vendor/crafting relation, so none was persisted. Tooltips are available on the adapter but not treated as a license or structured source for copying protected text/HTML.
+
+See [the current quality report](DATA_QUALITY_REPORT.md) for the exact import totals, slot/level coverage, 404s, and original-record integrity check. The new write workflow and safe resumption commands are in [CATALOG_IMPORT.md](CATALOG_IMPORT.md). Historical sample results above remain historical and should not be read as the current database state.

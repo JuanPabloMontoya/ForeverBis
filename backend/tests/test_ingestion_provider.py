@@ -171,3 +171,33 @@ def test_transient_http_failure_retries_and_terminal_failure_is_safe():
     )
     with pytest.raises(ProviderError, match="HTTP 404"):
         provider.get_json("https://thewowdb.com/api/v1/forever/item/5")
+
+
+def test_timeout_retries_are_bounded_and_documented_tooltip_is_parsed():
+    attempts = 0
+
+    def times_out(request, timeout):
+        nonlocal attempts
+        attempts += 1
+        raise TimeoutError("timed out")
+
+    provider = TheWoWDBProvider(
+        opener=times_out,
+        sleep=lambda _seconds: None,
+        monotonic=lambda: 0,
+    )
+    with pytest.raises(ProviderError, match="network request failed"):
+        provider.get_json("https://thewowdb.com/api/v1/forever/item/5")
+    assert attempts == 4
+
+    tooltip_payload = {
+        "id": 5,
+        "kind": "item",
+        "version": "forever",
+        "fields": {"stats": []},
+        "html": "<div>untrusted display markup</div>",
+    }
+    provider = provider_for([FakeResponse(tooltip_payload)])
+    tooltip = provider.get_item_tooltip(5)
+    assert tooltip.fields == {"stats": []}
+    assert tooltip.html == "<div>untrusted display markup</div>"
