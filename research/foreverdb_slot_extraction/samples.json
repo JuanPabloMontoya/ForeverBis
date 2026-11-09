@@ -1,0 +1,54 @@
+{
+  "retrieved_on": "2026-11-08",
+  "source": "ForeverDB",
+  "source_url": "https://foreverdb.net/items",
+  "build": "1.60.1.70862",
+  "extraction_date_shown": "2026-11-08",
+  "records": [
+    {
+      "item_id": 234819,
+      "name": "Demonic Gauntlet",
+      "item_level": 71,
+      "required_level": 60,
+      "slot": "Hands",
+      "subtype": "Leather",
+      "quality": "Epic",
+      "armor": "173 (includes 40 bonus armor)",
+      "stats": ["+15 Intellect", "+10 Spirit", "+30 Stamina"],
+      "detail_url": "https://foreverdb.net/item/234819",
+      "icon_url": null,
+      "source_text": "New in Forever: where it comes from isn't known yet.",
+      "forever_indicator": "New in WoW Forever; not in Classic Era"
+    },
+    {
+      "item_id": 235044,
+      "name": "Goo-Covered Demonic Gauntlet",
+      "item_level": 71,
+      "required_level": 60,
+      "slot": "Hands",
+      "subtype": "Leather",
+      "quality": "Epic",
+      "armor": "173 (includes 40 bonus armor)",
+      "stats": ["+15 Intellect", "+10 Spirit", "+30 Stamina"],
+      "detail_url": "https://foreverdb.net/item/235044",
+      "icon_url": null,
+      "source_text": "New in Forever: where it comes from isn't known yet.",
+      "forever_indicator": "New in WoW Forever; not in Classic Era"
+    },
+    {
+      "item_id": 284716,
+      "name": "Band of the Better Half",
+      "item_level": 70,
+      "required_level": 60,
+      "slot": "Finger",
+      "subtype": "Miscellaneous",
+      "quality": "Epic",
+      "armor": null,
+      "stats": ["+10 Stamina", "+18 Strength", "+12 Expertise"],
+      "detail_url": "https://foreverdb.net/item/284716",
+      "icon_url": null,
+      "source_text": "New in Forever: where it comes from isn't known yet.",
+      "forever_indicator": "New in WoW Forever; not in Classic Era"
+    }
+  ]
+}

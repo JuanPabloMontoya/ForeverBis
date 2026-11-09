@@ -14,7 +14,14 @@ from backend.app.models.catalog import (
     ItemStat,
     ScoringProfile,
 )
-from backend.app.models.operations import CatalogImportSnapshot, ItemDataSnapshot, ItemSuggestion
+from backend.app.models.operations import (
+    CatalogImportSnapshot,
+    FullCatalogImportJob,
+    FullCatalogImportPage,
+    FullCatalogProviderItem,
+    ItemDataSnapshot,
+    ItemSuggestion,
+)
 
 __all__ = [
     "AcquisitionSource",
@@ -32,4 +39,7 @@ __all__ = [
     "CatalogImportSnapshot",
     "ItemDataSnapshot",
     "ItemSuggestion",
+    "FullCatalogImportJob",
+    "FullCatalogImportPage",
+    "FullCatalogProviderItem",
 ]

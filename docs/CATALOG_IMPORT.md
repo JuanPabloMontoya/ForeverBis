@@ -49,3 +49,41 @@ python -m backend.app.ingestion.review_cli decide <suggestion-uuid> needs_info -
 ```
 
 Review decisions are available only through the local CLI because no real authentication provider exists. Approval does not import or verify an item.
+
+## Full catalog enumeration and detail hydration
+
+The full-catalog CLI is separate from the bounded `import-items --limit` command. It uses only the documented Forever item list (`/api/v1/forever/item/`) and detail (`/api/v1/forever/item/{id}`) endpoints. It does not use search to approximate completeness and does not scrape Wowhead.
+
+The provider documents at most 100 summaries per page and page numbers through 200. Pagination follows `links.next`, falling back to `page + 1` only when `has_more=true` and no next URL exists. It stops only when `has_more=false`; if page 200 still signals more results, the job is reported incomplete. Since `total` may be omitted, completeness uses pagination metadata. Requests are paced at about two per second across bounded detail workers; 429 honors `Retry-After`, and transient errors use bounded retries.
+
+### PowerShell workflow
+
+```powershell
+python -m backend.app.ingestion.full_catalog_cli enumerate --confirm-write --per-page 100
+python -m backend.app.ingestion.full_catalog_cli status --job-id 1
+python -m backend.app.ingestion.full_catalog_cli hydrate --job-id 1 --confirm-write
+
+# Resume the same job and stage after an interruption.
+python -m backend.app.ingestion.full_catalog_cli enumerate --job-id 1 --confirm-write --per-page 100
+python -m backend.app.ingestion.full_catalog_cli hydrate --job-id 1 --confirm-write
+
+python -m backend.app.ingestion.full_catalog_cli report --job-id 1
+```
+
+`full --confirm-write --workers 2` combines enumeration and hydration. Each page's records and completion marker commit in one transaction. Item detail payloads, ETags, attempt timestamps, status, and failures persist per item. A 304 preserves stored detail data. A 404 is recorded as a detail failure, not as proof that a summary record never existed. Existing detail payloads for the same provider build are reused. Malformed summaries with a valid positive ID are retained as provider observations and sent to detail hydration; malformed entries without valid IDs are counted but cannot be safely assigned a catalog identity.
+
+Summary-created catalog rows remain `needs_review`. Unknown fields remain unknown, and no statistics, restrictions, source, or verification are invented. The original three seed rows are preserved exactly; their API observations are stored in the separate provider-item records. Full list page payloads and per-item payloads are stored locally for traceability/cache revalidation. The reports contain aggregate counts only and must not be redistributed as the provider dataset.
+
+The live enumeration completed 193 pages and found 19,257 unique IDs for build `wow_classic_beta-1.60.1.70532`. Detail hydration is a separate operation; check the job report for its current completion and failure totals.
+
+## Full catalog live-run checkpoint (8 November 2026, 20:48 COT)
+
+Job `1` completed list enumeration (193 pages; 19,257 unique IDs; build `wow_classic_beta-1.60.1.70532`) and is still hydrating detail. Latest report: 1,361 HTTP detail successes, 13 reused details, 1,872 HTTP 404, 16,010 pending, one failed (ID 2315, HTTP 200 name mismatch). The importer now preserves raw payload on validation conflicts; the failed row is to be retried after the active pass. Exact pending/failure IDs are in the JSON report.
+
+```powershell
+python -m backend.app.ingestion.full_catalog_cli status --job-id 1
+python -m backend.app.ingestion.full_catalog_cli hydrate --job-id 1 --confirm-write
+python -m backend.app.ingestion.full_catalog_cli report --job-id 1
+```
+
+All 19,257 catalog rows remain `needs_review`. A 404 is only a failed detail lookup, not an item deletion. Enumeration is complete; hydration is not.

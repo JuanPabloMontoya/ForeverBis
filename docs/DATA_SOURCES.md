@@ -17,6 +17,12 @@ The published API terms reviewed for Phase 3 permit free use, including commerci
 
 Provider permission does not automatically grant a separate license for icon assets. This implementation stores and displays provider-supplied icon URLs; it does not download or rehost icons. Recheck image asset terms before proxying or redistributing those assets.
 
+## Full catalog enumeration (8 November 2026)
+
+The [official developer documentation](https://thewowdb.com/developers/) specifies public JSON endpoints, `per_page` 1–100, `page` 1–200, optional `total`, `has_more` and `links.next`, cacheable responses with ETags/304, and a burst/refill rate limit. The full importer follows pagination metadata, stores page ETags and responses, uses conditional revalidation where available, honors `Retry-After`, and conservatively paces requests. The terms require visible attribution and prohibit reselling raw data.
+
+The live summary enumeration completed 193 pages: 19,257 summaries and 19,257 unique Forever item IDs, with zero duplicate or invalid entries. The reported build was `wow_classic_beta-1.60.1.70532`. This verifies enumeration of the API view observed on 8 November 2026; it does not imply detail hydration or BIS data coverage is complete.
+
 ## Data boundaries
 
 - TheWoWDB is an external provider, not the catalog domain model. Provider schemas and normalization live under `backend/app/ingestion/providers` and `normalizers`.
@@ -25,7 +31,7 @@ Provider permission does not automatically grant a separate license for icon ass
 - List/detail disagreement for `required_level` is preserved as a field-level quality issue; the normalized value is `NULL` until reviewed.
 - Market prices are not treated as faction restrictions. No faction restrictions or acquisition sources are inferred from prices or empty fields.
 - No Classic Era fallback is used.
-- No full provider dataset is stored or exported. Since Prompt 3, raw payloads for the bounded sample are retained locally in PostgreSQL for provenance and auditing, but never returned by public APIs or JSON reports.
+- Full provider payloads are stored locally only where the approved full-catalog import workflow requires provenance and resumable ETag caching. No raw payloads are returned by public APIs or included in coverage reports; raw data is not sold or redistributed.
 
 ## Wowhead links
 
@@ -55,6 +61,10 @@ Recommendation: **restricted hybrid**—TheWoWDB for fields available through it
 
 The adapter now allows the documented item list with optional `q`, item detail, cross-kind Forever search, tooltip, NPC, and quest paths. Production import uses list `q` and item detail; it does not use Wowhead automation. Pagination, ETags/304, one-hour response cache (tooltip five minutes), 0.51-second request pacing, explicit timeouts, bounded retries, and per-record HTTP failure handling are implemented. Search results are discovery only; detail 404s are recorded as failures.
 
-The current bounded sample contains 18 catalog rows: the three original rows and 15 newly imported TheWoWDB records. Every row is `needs_review`; the new records retain original provider payload, field provenance, capture time, and per-import snapshot. The current API schema does not provide a verified item-to-NPC/quest/vendor/crafting relation, so none was persisted. Tooltips are available on the adapter but not treated as a license or structured source for copying protected text/HTML.
+The earlier controlled sample contained 18 catalog rows: the three original rows and 15 newly imported TheWoWDB records. Those historical rows were all `needs_review`; the current full-catalog enumeration and hydration totals are documented below and in the generated job report. The current API schema does not provide a verified item-to-NPC/quest/vendor/crafting relation, so none was persisted. Tooltips are available on the adapter but are not treated as authorization to copy protected HTML.
 
 See [the current quality report](DATA_QUALITY_REPORT.md) for the exact import totals, slot/level coverage, 404s, and original-record integrity check. The new write workflow and safe resumption commands are in [CATALOG_IMPORT.md](CATALOG_IMPORT.md). Historical sample results above remain historical and should not be read as the current database state.
+
+## Full catalog live status (8 November 2026, 20:48 COT)
+
+The documented Forever list reached `has_more=false`: 193 pages, 19,257 unique IDs, build `wow_classic_beta-1.60.1.70532`. Detail hydration remains active at 1,361 HTTP successes, 13 reused payloads, 1,872 HTTP 404, 16,010 pending and one recorded name-conflict failure. Request pacing follows the documented approximate two requests/second sustained rate. Do not describe details as fully hydrated until pending IDs have outcomes and the final report is regenerated. Every record remains `needs_review`.

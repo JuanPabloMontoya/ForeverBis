@@ -79,4 +79,10 @@ Required-level distribution: 12 unknown; 3 at level 3; 1 at level 4; 1 at level 
 
 Acquisition-source coverage is zero. The documented item detail records used here supplied no item-to-NPC, quest, vendor, profession, or instance relationship that could be persisted with evidence. No acquisition source was inferred. Existing individually mapped Wowhead Forever URLs remain on the three original rows only; none of the 15 new records received an automatically generated Wowhead URL.
 
-The live catalog summary reports 18 items, all `needs_review`. The live planner endpoint returned all 17 slots and zero recommendations. This is expected: every record is unverified, and the 27 active class/spec profiles still have empty provisional weights. No synthetic production item, scoring profile, or recommendation was added.
+At the time of the bounded Prompt 3 check, the live catalog summary reported 18 items, all `needs_review`. The planner returned 17 slots and zero recommendations because records were unverified and all 27 active class/spec profiles had empty provisional weights. This historical check introduced no synthetic production item or recommendation. The full catalog results are appended below.
+
+## Full catalog ingestion checkpoint (8 November 2026, 20:48 COT)
+
+Summary enumeration is complete: 193 pages, 19,257 summaries/unique provider IDs, zero duplicates/invalid records; build `wow_classic_beta-1.60.1.70532`. Detail hydration is running: 1,361 HTTP successes, 13 reused cached payloads, 1,872 HTTP 404 outcomes, 16,010 pending and one failed. No 304, 429, 5xx or network failure was recorded. The JSON report lists exact pending and failed IDs. The failed ID 2315 returned HTTP 200 with a name conflicting with its summary; the importer now preserves raw detail on a validation conflict and this row awaits retry after the current pass.
+
+Local count is 19,257 (18 prior; 19,239 new; 18 matched); all are `needs_review`, zero verified. IDs 25/35/36 remain intact. Unknown required levels: 18,476; missing normalized statistics: 19,076; missing restrictions: 19,257; acquisition sources: zero. Raw summaries: 19,257; raw detail payloads: 1,374. The machine-readable and Markdown report files are current only as of 20:48 COT; regenerate after hydration finishes.

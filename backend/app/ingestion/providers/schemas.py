@@ -46,6 +46,7 @@ class ItemListResponse(ProviderModel):
     has_more: bool
     links: ProviderLinks | None = None
     results: list[ItemListRecord]
+    attribution: ProviderAttribution | None = None
 
 
 class ItemResponse(ProviderModel):

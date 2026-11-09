@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -85,7 +86,11 @@ class TheWoWDBProvider:
         self._last_request_at: float | None = None
         self._cache: dict[str, CachedResponse] = {}
         self._raw_summaries: dict[int, dict[str, Any]] = {}
+        self._raw_details: dict[int, dict[str, Any]] = {}
         self._endpoint_etags: dict[str, str | None] = {}
+        self._endpoint_statuses: dict[str, int] = {}
+        self._endpoint_status_counts: dict[str, dict[str, int]] = {}
+        self._request_lock = threading.Lock()
         self.current_build: str | None = None
 
     @staticmethod
@@ -105,12 +110,21 @@ class TheWoWDBProvider:
             raise ProviderError("Refusing a non-documented or external provider URL")
 
     def _pace(self) -> None:
-        now = self.monotonic()
-        if self._last_request_at is not None:
-            delay = REQUEST_INTERVAL_SECONDS - (now - self._last_request_at)
-            if delay > 0:
-                self.sleep(delay)
-        self._last_request_at = self.monotonic()
+        # The lock is shared by all bounded hydration workers, enforcing one
+        # process-wide request cadence rather than one cadence per worker.
+        with self._request_lock:
+            now = self.monotonic()
+            if self._last_request_at is not None:
+                delay = REQUEST_INTERVAL_SECONDS - (now - self._last_request_at)
+                if delay > 0:
+                    self.sleep(delay)
+            self._last_request_at = self.monotonic()
+
+    def _record_http_status(self, url: str, status: int) -> None:
+        with self._request_lock:
+            counts = self._endpoint_status_counts.setdefault(url, {})
+            key = str(status)
+            counts[key] = counts.get(key, 0) + 1
 
     def get_json(
         self,
@@ -120,9 +134,10 @@ class TheWoWDBProvider:
         etag: str | None = None,
         cached_payload: Any = None,
         cache_seconds: int = 3600,
+        use_memory_cache: bool = True,
     ) -> Any:
         self._validate_api_url(url)
-        cached = self._cache.get(url)
+        cached = self._cache.get(url) if use_memory_cache else None
         if cached and cached.expires_at > self.monotonic() and not revalidate:
             return cached.payload
 
@@ -140,14 +155,17 @@ class TheWoWDBProvider:
             try:
                 with self.opener(request, timeout=self.timeout) as response:
                     status = getattr(response, "status", 200)
+                    self._record_http_status(url, status)
                     if status == 304:
                         payload = cached.payload if cached else cached_payload
                         if payload is None:
                             raise ProviderError("TheWoWDB returned 304 without a cached payload")
-                        self._cache[url] = CachedResponse(
-                            payload, effective_etag, self.monotonic() + cache_seconds
-                        )
+                        if use_memory_cache:
+                            self._cache[url] = CachedResponse(
+                                payload, effective_etag, self.monotonic() + cache_seconds
+                            )
                         self._endpoint_etags[url] = effective_etag
+                        self._endpoint_statuses[url] = 304
                         return payload
                     body = response.read()
                     try:
@@ -155,24 +173,30 @@ class TheWoWDBProvider:
                     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                         raise ProviderError("TheWoWDB returned invalid JSON") from exc
                     etag = response.headers.get("ETag")
-                    self._cache[url] = CachedResponse(
-                        payload=payload,
-                        etag=etag,
-                        expires_at=self.monotonic() + cache_seconds,
-                    )
+                    if use_memory_cache:
+                        self._cache[url] = CachedResponse(
+                            payload=payload,
+                            etag=etag,
+                            expires_at=self.monotonic() + cache_seconds,
+                        )
                     self._endpoint_etags[url] = etag
-                    logger.info("Received provider response", extra={"provider": self.name})
+                    self._endpoint_statuses[url] = status
+                    logger.debug("Received provider response", extra={"provider": self.name})
                     return payload
             except HTTPError as exc:
+                self._record_http_status(url, exc.code)
                 if exc.code == 304 and cached:
                     cached.expires_at = self.monotonic() + cache_seconds
                     self._endpoint_etags[url] = cached.etag
+                    self._endpoint_statuses[url] = 304
                     return cached.payload
                 if exc.code == 304 and cached_payload is not None:
-                    self._cache[url] = CachedResponse(
-                        cached_payload, effective_etag, self.monotonic() + cache_seconds
-                    )
+                    if use_memory_cache:
+                        self._cache[url] = CachedResponse(
+                            cached_payload, effective_etag, self.monotonic() + cache_seconds
+                        )
                     self._endpoint_etags[url] = effective_etag
+                    self._endpoint_statuses[url] = 304
                     return cached_payload
                 if exc.code == 429 and attempt < MAX_RETRIES:
                     self.sleep(retry_after_seconds(exc.headers.get("Retry-After")))
@@ -180,6 +204,7 @@ class TheWoWDBProvider:
                 if exc.code in {500, 502, 503, 504} and attempt < MAX_RETRIES:
                     self.sleep(min(2**attempt, MAX_RETRY_AFTER_SECONDS))
                     continue
+                self._endpoint_statuses[url] = exc.code
                 suffix = (
                     f"; Retry-After={exc.headers.get('Retry-After')}" if exc.code == 429 else ""
                 )
@@ -192,27 +217,64 @@ class TheWoWDBProvider:
         raise ProviderError("TheWoWDB request exhausted retry attempts")
 
     def list_page(self, page: int, per_page: int, *, search: str | None = None) -> ItemListResponse:
+        payload = self.list_page_payload(page, per_page, search=search)
+        try:
+            response = ItemListResponse.model_validate(payload)
+            self.current_build = response.build
+            return response
+        except ValidationError as exc:
+            raise ProviderError("TheWoWDB item list did not match the expected schema") from exc
+
+    def list_page_payload(
+        self,
+        page: int,
+        per_page: int,
+        *,
+        search: str | None = None,
+        url: str | None = None,
+        etag: str | None = None,
+        cached_payload: dict[str, Any] | None = None,
+        use_memory_cache: bool = True,
+        retain_summaries: bool = True,
+    ) -> dict[str, Any]:
+        """Fetch one documented list page as raw JSON for per-record validation."""
         if not 1 <= page <= MAX_PAGES:
             raise ValueError(f"page must be between 1 and {MAX_PAGES}")
         if not 1 <= per_page <= MAX_PAGE_SIZE:
             raise ValueError(f"per_page must be between 1 and {MAX_PAGE_SIZE}")
         if search is not None and (not search.strip() or len(search) > 64):
             raise ValueError("search must contain 1 to 64 characters")
-        params = {"page": page, "per_page": per_page}
-        if search:
-            params["q"] = search.strip()
-        url = f"{self.api_root}/forever/item/?{urlencode(params)}"
-        payload = self.get_json(url)
-        try:
-            response = ItemListResponse.model_validate(payload)
-            self.current_build = response.build
-            if isinstance(payload, dict):
-                for raw in payload.get("results", []):
-                    if isinstance(raw, dict) and isinstance(raw.get("id"), int):
-                        self._raw_summaries[raw["id"]] = raw
-            return response
-        except ValidationError as exc:
-            raise ProviderError("TheWoWDB item list did not match the expected schema") from exc
+        if url is None:
+            params = {"page": page, "per_page": per_page}
+            if search:
+                params["q"] = search.strip()
+            url = f"{self.api_root}/forever/item/?{urlencode(params)}"
+        payload = self.get_json(
+            url,
+            revalidate=etag is not None,
+            etag=etag,
+            cached_payload=cached_payload,
+            use_memory_cache=use_memory_cache,
+        )
+        if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
+            raise ProviderError("TheWoWDB item list did not contain a results array")
+        if retain_summaries:
+            for raw in payload["results"]:
+                if isinstance(raw, dict) and isinstance(raw.get("id"), int):
+                    self._raw_summaries[raw["id"]] = raw
+        build = payload.get("build")
+        self.current_build = build if isinstance(build, str) else None
+        return payload
+
+    def get_url_etag(self, url: str) -> str | None:
+        return self._endpoint_etags.get(url)
+
+    def get_url_status(self, url: str) -> int | None:
+        return self._endpoint_statuses.get(url)
+
+    def get_list_page_etag(self, page: int, per_page: int) -> str | None:
+        url = f"{self.api_root}/forever/item/?{urlencode({'page': page, 'per_page': per_page})}"
+        return self._endpoint_etags.get(url)
 
     def iter_item_summaries(
         self,
@@ -275,6 +337,8 @@ class TheWoWDBProvider:
         *,
         etag: str | None = None,
         cached_payload: dict[str, Any] | None = None,
+        cache_response: bool = True,
+        retain_raw: bool = False,
     ) -> ItemResponse:
         if item_id <= 0:
             raise ValueError("item_id must be positive")
@@ -283,6 +347,7 @@ class TheWoWDBProvider:
             revalidate=etag is not None,
             etag=etag,
             cached_payload=cached_payload,
+            use_memory_cache=cache_response,
         )
         try:
             detail = ItemResponse.model_validate(payload)
@@ -292,6 +357,8 @@ class TheWoWDBProvider:
             ) from exc
         if detail.id != item_id:
             raise ProviderError(f"TheWoWDB item detail ID mismatch for {item_id}")
+        if retain_raw and isinstance(payload, dict):
+            self._raw_details[item_id] = payload
         return detail
 
     def get_item_tooltip(self, item_id: int) -> ItemTooltipResponse:
@@ -318,11 +385,29 @@ class TheWoWDBProvider:
 
     def get_raw_item_payload(self, item_id: int) -> dict[str, Any]:
         detail_url = f"{self.api_root}/forever/item/{item_id}"
-        detail = self._cache.get(detail_url)
+        detail = self._raw_details.get(item_id)
+        if detail is None:
+            cached = self._cache.get(detail_url)
+            detail = cached.payload if cached and isinstance(cached.payload, dict) else None
         return {
             "summary": self._raw_summaries.get(item_id),
-            "detail": detail.payload if detail and isinstance(detail.payload, dict) else None,
+            "detail": detail,
         }
+
+    def release_raw_item_payload(self, item_id: int) -> None:
+        self._raw_details.pop(item_id, None)
+
+    def release_item_metadata(self, item_id: int) -> None:
+        url = f"{self.api_root}/forever/item/{item_id}"
+        self._endpoint_etags.pop(url, None)
+        self._endpoint_statuses.pop(url, None)
+        self._endpoint_status_counts.pop(url, None)
 
     def get_item_etag(self, item_id: int) -> str | None:
         return self._endpoint_etags.get(f"{self.api_root}/forever/item/{item_id}")
+
+    def get_item_status(self, item_id: int) -> int | None:
+        return self._endpoint_statuses.get(f"{self.api_root}/forever/item/{item_id}")
+
+    def get_item_status_counts(self, item_id: int) -> dict[str, int]:
+        return dict(self._endpoint_status_counts.get(f"{self.api_root}/forever/item/{item_id}", {}))

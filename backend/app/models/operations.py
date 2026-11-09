@@ -91,6 +91,114 @@ class ItemDataSnapshot(Base):
     import_snapshot: Mapped[CatalogImportSnapshot] = relationship(back_populates="records")
 
 
+class FullCatalogImportJob(Base):
+    """Resumable full-catalog enumeration and hydration run."""
+
+    __tablename__ = "full_catalog_import_jobs"
+    __table_args__ = (
+        CheckConstraint("per_page BETWEEN 1 AND 100", name="ck_full_catalog_job_page_size"),
+        CheckConstraint(
+            "status IN ('running', 'enumerated', 'completed', 'partial', 'failed')",
+            name="ck_full_catalog_job_status",
+        ),
+        Index("ix_full_catalog_jobs_status_started", "status", "started_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("data_sources.id", ondelete="RESTRICT"))
+    provider_version: Mapped[str] = mapped_column(String(30), default="forever", nullable=False)
+    provider_build: Mapped[str | None] = mapped_column(String(120))
+    attribution: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    per_page: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="running", nullable=False)
+    stage: Mapped[str] = mapped_column(String(30), default="enumeration", nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_completed_page: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    initial_catalog_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    catalog_items_created: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    catalog_items_updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    catalog_items_unchanged: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duplicate_prevention_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_pages: Mapped[int | None] = mapped_column(Integer)
+    pages_completed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    summary_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    unique_ids: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duplicate_ids: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    invalid_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    http_status_counts: Mapped[dict[str, int]] = mapped_column(JSON, default=dict, nullable=False)
+    next_page_url: Mapped[str | None] = mapped_column(String(1000))
+    last_etag: Mapped[str | None] = mapped_column(String(500))
+    last_error: Mapped[str | None] = mapped_column(String(500))
+
+
+class FullCatalogImportPage(Base):
+    """A provider page is complete only after all valid records have persisted."""
+
+    __tablename__ = "full_catalog_import_pages"
+    __table_args__ = (
+        UniqueConstraint("job_id", "page_number", name="uq_full_catalog_page_job_number"),
+        Index("ix_full_catalog_pages_job_status", "job_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(
+        ForeignKey("full_catalog_import_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="processing", nullable=False)
+    provider_build: Mapped[str | None] = mapped_column(String(120))
+    etag: Mapped[str | None] = mapped_column(String(500))
+    fetched_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    unique_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duplicate_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    invalid_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    response_metadata: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    raw_response_payload: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class FullCatalogProviderItem(Base):
+    """Current provider summary/detail cache for one Forever item ID."""
+
+    __tablename__ = "full_catalog_provider_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_id", "provider_version", "provider_item_id", name="uq_full_provider_item"
+        ),
+        CheckConstraint(
+            "hydration_status IN ('pending', 'hydrated', 'not_found', 'failed')",
+            name="ck_full_provider_item_hydration_status",
+        ),
+        Index("ix_full_provider_items_hydration", "hydration_status", "provider_item_id"),
+        Index("ix_full_provider_items_build", "provider_build"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(
+        ForeignKey("full_catalog_import_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    source_id: Mapped[int] = mapped_column(ForeignKey("data_sources.id", ondelete="RESTRICT"))
+    provider_version: Mapped[str] = mapped_column(String(30), default="forever", nullable=False)
+    provider_build: Mapped[str | None] = mapped_column(String(120))
+    provider_item_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("items.id", ondelete="SET NULL"))
+    source_page: Mapped[int] = mapped_column(Integer, nullable=False)
+    summary_payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    summary_validation_error: Mapped[str | None] = mapped_column(String(500))
+    summary_etag: Mapped[str | None] = mapped_column(String(500))
+    summary_captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    detail_payload: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    detail_etag: Mapped[str | None] = mapped_column(String(500))
+    detail_captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    hydration_status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
+    detail_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(String(500))
+    last_http_status: Mapped[int | None] = mapped_column(Integer)
+
+
 class ItemSuggestion(Base):
     """Public item suggestion; it never mutates catalog or recommendation records."""
 

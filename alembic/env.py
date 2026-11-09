@@ -6,6 +6,7 @@ from alembic import context
 from backend.app.core.config import get_settings
 from backend.app.db.base import Base
 from backend.app.models import catalog as _catalog  # noqa: F401
+from backend.app.models import operations as _operations  # noqa: F401
 from sqlalchemy import engine_from_config, pool
 
 config = context.config

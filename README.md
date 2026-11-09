@@ -2,7 +2,7 @@
 
 Forever BIS is a WoW Forever level-by-level gear progression planner built with React/TypeScript and FastAPI. Its homepage is the Gear Planner prototype with character selectors, a selectable 1–60 progression strip, and a 17-slot equipment paper doll. Item Database is a secondary section backed by the Phase 3 bounded, source-aware catalog. Verified recommendations are not available, so the planner shows explicit unavailable states and never fills slots with invented gear.
 
-Catalog data is supplied by TheWoWDB's documented Forever API, with visible attribution. Unknown and conflicting values remain unknown or under review. The current local sample contains 18 items, all marked `needs_review`; it is not a completeness claim and cannot generate confirmed recommendations. See [the data quality report](docs/DATA_QUALITY_REPORT.md) before using the fields. The application does not silently substitute Classic Era data or redistribute provider datasets.
+Catalog data is supplied by TheWoWDB's documented Forever API, with visible attribution. Unknown and conflicting values remain unknown or under review. The local catalog has been enumerated from the full available list; detail hydration and field coverage are tracked separately. Imported rows do not automatically become verified, and the application does not silently substitute Classic Era data or redistribute provider datasets. See [the data quality report](docs/DATA_QUALITY_REPORT.md).
 
 ## Requirements
 
@@ -116,7 +116,31 @@ Confirmed write (maximum 100 records):
 python -m backend.app.ingestion.cli import-items --limit 10 --write
 ```
 
-Type `IMPORT` when prompted. For explicit noninteractive use, replace `--write` with `--confirm-write`. A missing write flag defaults to dry-run. Read [CATALOG_IMPORT.md](docs/CATALOG_IMPORT.md) and [DATA_SOURCES.md](docs/DATA_SOURCES.md) first. No full-dataset import or raw dataset export is implemented.
+Type `IMPORT` when prompted. For explicit noninteractive use, replace `--write` with `--confirm-write`. A missing write flag defaults to dry-run. Read [CATALOG_IMPORT.md](docs/CATALOG_IMPORT.md) and [DATA_SOURCES.md](docs/DATA_SOURCES.md) first. The full-catalog workflow below preserves provider payloads locally and does not provide bulk dataset export.
+
+## Full TheWoWDB Forever catalog
+
+The full importer follows documented pagination until `has_more` is false, checkpoints each page, then hydrates every item ID with bounded workers and provider request pacing. All write commands require explicit `--confirm-write`; PostgreSQL is not reset.
+
+Current live import status (8 November 2026, 20:48 COT): summary enumeration completed 193 pages / 19,257 IDs; job 1 detail hydration remains in progress (1,361 detail successes, 13 reused, 1,872 HTTP 404, 16,010 pending, one failed). Check `python -m backend.app.ingestion.full_catalog_cli status --job-id 1` before interpreting catalog detail coverage. Resume with `python -m backend.app.ingestion.full_catalog_cli hydrate --job-id 1 --confirm-write`; regenerate the report after completion.
+
+```powershell
+# Enumerate all summary pages and note the printed job ID.
+python -m backend.app.ingestion.full_catalog_cli enumerate --confirm-write --per-page 100
+
+# Hydrate each discovered provider item ID.
+python -m backend.app.ingestion.full_catalog_cli hydrate --job-id 1 --confirm-write
+
+# Resume enumeration or hydration after interruption.
+python -m backend.app.ingestion.full_catalog_cli enumerate --job-id 1 --confirm-write --per-page 100
+python -m backend.app.ingestion.full_catalog_cli hydrate --job-id 1 --confirm-write
+
+# Check status and write JSON plus Markdown reports.
+python -m backend.app.ingestion.full_catalog_cli status --job-id 1
+python -m backend.app.ingestion.full_catalog_cli report --job-id 1
+```
+
+`full --confirm-write --workers 2` runs both stages sequentially. The initial live run enumerated 193 pages and 19,257 unique IDs; detail hydration has its own checkpoint and status, so check the job report before treating it as complete.
 
 ## Tests and checks
 
@@ -151,7 +175,7 @@ npm run build
 - `POST /api/v1/items/{item_id}/eligibility`, `POST /api/v1/items/{item_id}/score`, and `POST /api/v1/items/compare`: item-level eligibility and scoring contracts.
 - `GET /api/v1/planner/recommendations`: per-slot planner results for class, specialization, faction, and level. It returns all 17 slots and only includes a primary recommendation when verification, availability, eligibility, and score are confirmed.
 
-The Gear Planner is the homepage and uses backend profile and planner APIs. The secondary Item Database keeps its search and filters, page navigation, catalog summary, item detail, uncertainty labels, and TheWoWDB attribution. Current profile weights are intentionally empty and all 18 real catalog records remain `needs_review`; therefore the live planner returns no recommendations. This is an expected safe state, not a complete gear list. See [the planner guide](docs/GEAR_PLANNER.md) and [recommendation flow](docs/RECOMMENDATION_FLOW.md).
+The Gear Planner is the homepage and uses backend profile and planner APIs. The secondary Item Database keeps its search and filters, page navigation, catalog summary, item detail, uncertainty labels, and TheWoWDB attribution. Scoring profiles still have empty provisional weights, and imported records are not automatically verified; therefore the live planner returns no confirmed recommendations. This is an expected safe state, not a complete gear list. See [the planner guide](docs/GEAR_PLANNER.md) and [recommendation flow](docs/RECOMMENDATION_FLOW.md).
 
 There is no public administrative review endpoint because the repository has no real authentication. Local operators can inspect with `python -m backend.app.ingestion.review_cli pending`, then decide with `python -m backend.app.ingestion.review_cli decide <uuid> approved|rejected|needs_info --notes "..."`. Approval does not verify or import an item. Details: [community workflow](docs/COMMUNITY_CONTRIBUTIONS.md), [verification](docs/DATA_VERIFICATION.md), [patch snapshots](docs/PATCH_SNAPSHOTS.md).
 

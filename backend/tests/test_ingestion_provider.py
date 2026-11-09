@@ -108,6 +108,19 @@ def test_pagination_follows_only_documented_item_routes_and_respects_limit():
         provider.get_json("https://example.com/api/v1/forever/item/?page=2")
 
 
+def test_full_import_page_mode_does_not_retain_catalog_payloads_in_memory():
+    provider = provider_for([FakeResponse(list_page([item_summary(91)]))])
+    payload = provider.list_page_payload(
+        1,
+        2,
+        use_memory_cache=False,
+        retain_summaries=False,
+    )
+    assert payload["results"][0]["id"] == 91
+    assert provider._cache == {}
+    assert provider._raw_summaries == {}
+
+
 def test_etag_revalidation_uses_cached_body_on_304():
     headers = Message()
     headers["ETag"] = 'W/"record-v1"'
@@ -147,6 +160,7 @@ def test_rate_limit_retries_after_retry_after_header():
     assert result == {"ok": True}
     assert 0.0 in delays
     assert any(delay >= 0.5 for delay in delays)
+    assert provider.get_item_status_counts(5) == {"429": 1, "200": 1}
 
 
 def test_transient_http_failure_retries_and_terminal_failure_is_safe():
